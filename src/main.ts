@@ -1324,7 +1324,14 @@ class LumenwildScene extends Phaser.Scene {
     const glow = this.add.circle(x, y - 18, 38, this.completedTrials.has(id) ? palette.mint : palette.sun, 0.045)
       .setDepth(4)
       .setBlendMode(Phaser.BlendModes.ADD);
-    shrine.setData('glow', glow);
+    const prompt = this.add.text(x, y - 63, this.completedTrials.has(id) ? 'RESONANCE RESTORED' : 'STRIKE TO RING', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '9px',
+      fontStyle: '900',
+      color: this.completedTrials.has(id) ? '#aef5d9' : '#ffe6a2',
+      letterSpacing: 1.3,
+    }).setOrigin(0.5).setAlpha(0.62).setDepth(5);
+    shrine.setData('glow', glow).setData('prompt', prompt);
     this.tweens.add({
       targets: glow,
       scale: 1.3,
@@ -1350,7 +1357,7 @@ class LumenwildScene extends Phaser.Scene {
     for (const shrine of this.trialShrines) {
       const id = shrine.getData('trialId') as string;
       if (this.completedTrials.has(id)) continue;
-      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y) < 76) {
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y) < 92 && this.attacking) {
         this.startTrial(id, shrine.getData('label') as string, shrine.x, shrine.y);
         break;
       }
@@ -1404,7 +1411,9 @@ class LumenwildScene extends Phaser.Scene {
     const shrine = this.trialShrines.find(item => item.getData('trialId') === id);
     shrine?.setAlpha(0.34);
     const glow = shrine?.getData('glow') as Phaser.GameObjects.Arc | undefined;
+    const prompt = shrine?.getData('prompt') as Phaser.GameObjects.Text | undefined;
     glow?.setFillStyle(palette.mint, 1);
+    prompt?.setText('RESONANCE RESTORED').setColor('#aef5d9');
     this.soundscape.victory();
     this.cameras.main.flash(260, 140, 255, 190);
     if (this.completedTrials.size >= 3) {
@@ -2216,8 +2225,7 @@ class LumenwildScene extends Phaser.Scene {
     }).setOrigin(0.5);
     const reset = button(491, 'RESET PROGRESS', '#ffadbd', () => {
       localStorage.removeItem(SAVE_KEY);
-      this.physics.world.resume();
-      this.scene.restart();
+      window.location.reload();
     });
     const caution = this.add.text(640, 535, 'Reset clears abilities, memories, trials, and boss progress.', {
       fontFamily: 'system-ui, sans-serif',
@@ -2310,7 +2318,7 @@ class LumenwildScene extends Phaser.Scene {
 
     const legend = this.add.text(640, 493,
       '◉ CHECKPOINT     ↠ DASH BLOOM     ✦ PETAL LEAP     ◆ GUARDIAN     △ HEART SHRINE\n' +
-      '❀ Memory petals hide behind breakable crystal alcoves.  Springcaps launch you upward.',
+      '❀ Memory petals hide behind breakable crystal alcoves.  Springcaps launch you upward.\n⚔ Strike a resonance bell to begin its optional combat trial.',
       {
         fontFamily: 'system-ui, sans-serif',
         fontSize: '12px',
