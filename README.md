@@ -30,6 +30,7 @@ The production bundle is written to `dist/` and can be deployed to any static ho
 | Jump | Space / W / Up | A |
 | Attack | J | B / Y |
 | Dash (after unlock) | Shift | X / RB |
+| World map | M | Select |
 | Respawn | R | — |
 
 ## Game-feel features
@@ -40,7 +41,14 @@ The production bundle is written to `dist/` and can be deployed to any static ho
 - fast dash with screen shake, particles, and crystal-gate breaking
 - responsive melee attack with knockback
 - checkpoints and forgiving respawn
-- local save state for abilities, shards, and boss progress
+- local save state for abilities, shards, memory petals, miniboss/boss progress, and discovered biomes
+- full-screen world map with live player position, landmarks, objectives, and completion status
+- three dash-gated secret alcoves plus a fourth memory petal awarded by the Brambleheart miniboss
+- Heart Bloom completion reward: recover all four memory petals to permanently gain a sixth heart
+- springcap launchers that create alternate traversal lines and preserve double-jump flow
+- Glowwing aerial enemies with pursuit behavior and Thornpod ranged enemies with parryable seed projectiles
+- Brambleheart mid-game miniboss with charge behavior, dedicated intro, health bar, and secret reward
+- friendly NPC encounters that surface exploration hints and world lore
 - keyboard + gamepad support
 - parallax scenery, animated motes, procedural VFX, and synthesized WebAudio feedback
 - runtime-authored sprite sheets with frame-based idle, run, jump, fall, attack, dash, hurt, slime, and boss animations
@@ -63,8 +71,8 @@ A GitHub Pages workflow is included at `.github/workflows/pages.yml`. The reposi
 
 1. Open **Settings → Pages**.
 2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
-3. Re-run **Deploy game to GitHub Pages** from the Actions tab, or push another commit.
+3. Run **Deploy game to GitHub Pages** manually from the Actions tab.
 
-The workflow installs dependencies, runs the production Vite build, uploads `dist/` as the Pages artifact, and deploys it through the `github-pages` environment.
+The workflow is intentionally manual until Pages is enabled, so normal code pushes keep CI green. When run, it installs dependencies, builds the Vite production bundle, uploads `dist/` as the Pages artifact, and deploys it through the `github-pages` environment.
 
 Because Vite is configured with `base: './'`, the generated `dist/` works on the repository subpath as well as other static hosts.
