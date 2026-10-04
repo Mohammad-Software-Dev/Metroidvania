@@ -31,6 +31,7 @@ The production bundle is written to `dist/` and can be deployed to any static ho
 | Attack | J | B / Y |
 | Dash (after unlock) | Shift | X / RB |
 | World map | M | Select |
+| Pause / settings | P or Esc | Start |
 | Respawn | R | — |
 
 ## Game-feel features
@@ -41,10 +42,13 @@ The production bundle is written to `dist/` and can be deployed to any static ho
 - fast dash with screen shake, particles, and crystal-gate breaking
 - responsive melee attack with knockback
 - checkpoints and forgiving respawn
-- local save state for abilities, shards, memory petals, miniboss/boss progress, and discovered biomes
+- local save state for abilities, shards, memory petals, trials, miniboss/boss progress, discovered biomes, and preferences
 - full-screen world map with live player position, landmarks, objectives, and completion status
 - three dash-gated secret alcoves plus a fourth memory petal awarded by the Brambleheart miniboss
 - Heart Bloom completion reward: recover all four memory petals to permanently gain a sixth heart
+- Bloom Glide traversal ability earned from Brambleheart; hold jump while descending to slow your fall and extend routes
+- three optional Resonance Trials started by striking their bells; complete all three to awaken the double-damage Joyblade
+- pause/settings overlay with persistent audio and screen-shake preferences plus a full progress reset
 - springcap launchers that create alternate traversal lines and preserve double-jump flow
 - Glowwing aerial enemies with pursuit behavior and Thornpod ranged enemies with parryable seed projectiles
 - Brambleheart mid-game miniboss with charge behavior, dedicated intro, health bar, and secret reward
