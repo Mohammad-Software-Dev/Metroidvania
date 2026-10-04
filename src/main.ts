@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import './style.css';
 
-type AbilityState = { dash: boolean; doubleJump: boolean };
+type AbilityState = { dash: boolean; doubleJump: boolean; glide: boolean };
 type SaveState = {
   abilities: AbilityState;
   shards: number;
@@ -9,6 +9,8 @@ type SaveState = {
   petals?: string[];
   minibossDefeated?: boolean;
   visitedBiomes?: string[];
+  completedTrials?: string[];
+  settings?: { audio: boolean; screenShake: boolean };
 };
 
 type ControlKeys = {
@@ -21,6 +23,8 @@ type ControlKeys = {
   attack: Phaser.Input.Keyboard.Key;
   restart: Phaser.Input.Keyboard.Key;
   map: Phaser.Input.Keyboard.Key;
+  pause: Phaser.Input.Keyboard.Key;
+  escape: Phaser.Input.Keyboard.Key;
   arrowLeft: Phaser.Input.Keyboard.Key;
   arrowRight: Phaser.Input.Keyboard.Key;
   arrowUp: Phaser.Input.Keyboard.Key;
@@ -50,12 +54,18 @@ class Soundscape {
   private ctx?: AudioContext;
   private master?: GainNode;
   private ambientTimer?: number;
+  private enabled = true;
+
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    if (this.master) this.master.gain.value = enabled ? 0.12 : 0;
+  }
 
   unlock(): void {
     if (!this.ctx) {
       this.ctx = new AudioContext();
       this.master = this.ctx.createGain();
-      this.master.gain.value = 0.12;
+      this.master.gain.value = this.enabled ? 0.12 : 0;
       this.master.connect(this.ctx.destination);
       this.startAmbient();
     }
@@ -63,7 +73,7 @@ class Soundscape {
   }
 
   private tone(freq: number, duration: number, type: OscillatorType = 'sine', volume = 0.12, slide = 0): void {
-    if (!this.ctx || !this.master) return;
+    if (!this.enabled || !this.ctx || !this.master) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -119,13 +129,17 @@ class LumenwildScene extends Phaser.Scene {
   private npcs: Phaser.GameObjects.Image[] = [];
   private keys!: ControlKeys;
   private soundscape = new Soundscape();
-  private abilities: AbilityState = { dash: false, doubleJump: false };
+  private abilities: AbilityState = { dash: false, doubleJump: false, glide: false };
   private health = 5;
   private maxHealth = 5;
   private shards = 0;
   private memoryPetals = new Set<string>();
   private minibossDefeated = false;
   private visitedBiomes = new Set<string>();
+  private completedTrials = new Set<string>();
+  private activeTrialId = '';
+  private gliding = false;
+  private lastGlidePetalAt = 0;
   private extraJumps = 0;
   private facing = 1;
   private dashing = false;
@@ -165,12 +179,21 @@ class LumenwildScene extends Phaser.Scene {
   private mapMarker!: Phaser.GameObjects.Arc;
   private mapStatusText!: Phaser.GameObjects.Text;
   private lastNpcSpoken = '';
+  private pauseOpen = false;
+  private pausePadHeld = false;
+  private pauseOverlay!: Phaser.GameObjects.Container;
+  private pauseAudioText!: Phaser.GameObjects.Text;
+  private pauseShakeText!: Phaser.GameObjects.Text;
+  private audioEnabled = true;
+  private screenShakeEnabled = true;
+  private trialShrines: Phaser.GameObjects.Image[] = [];
 
 
   constructor() { super('lumenwild'); }
 
   create(): void {
     this.loadSave();
+    this.soundscape.setEnabled(this.audioEnabled);
     this.createTextures();
     this.createContentTextures();
     this.createSpriteSheets();
@@ -188,6 +211,7 @@ class LumenwildScene extends Phaser.Scene {
     this.createExpandedContent();
     this.createHud();
     this.createMapOverlay();
+    this.createPauseOverlay();
     this.createScreenFx();
     this.setupControls();
     this.setupCollisions();
@@ -207,6 +231,15 @@ class LumenwildScene extends Phaser.Scene {
     if (!this.started || this.won) return;
 
     const pad = this.padState();
+    const keyboardPause = Phaser.Input.Keyboard.JustDown(this.keys.pause) || Phaser.Input.Keyboard.JustDown(this.keys.escape);
+    const padPause = pad.pause && !this.pausePadHeld;
+    this.pausePadHeld = pad.pause;
+    if (keyboardPause || padPause) {
+      this.togglePause();
+      return;
+    }
+    if (this.pauseOpen) return;
+
     const keyboardMap = Phaser.Input.Keyboard.JustDown(this.keys.map);
     const padMap = pad.map && !this.mapPadHeld;
     this.mapPadHeld = pad.map;
@@ -224,6 +257,7 @@ class LumenwildScene extends Phaser.Scene {
     this.updateEnemies(time);
     this.updateProjectiles(time);
     this.updateNpcs();
+    this.updateTrials();
     this.updateBiome();
     this.updateObjective();
     this.checkBreakables();
@@ -466,6 +500,18 @@ class LumenwildScene extends Phaser.Scene {
       g.fillStyle(palette.ink).fillCircle(22, 20, 2).fillCircle(32, 20, 2);
       g.fillStyle(palette.pink).fillEllipse(12, 12, 18, 9).fillEllipse(40, 12, 18, 9);
       g.fillStyle(palette.sun).fillCircle(26, 4, 4);
+    });
+
+    make('trial-bell', 74, 92, g => {
+      g.fillStyle(0x08192b, 0.4).fillEllipse(37, 85, 64, 11);
+      g.fillStyle(0x29475b).fillRoundedRect(31, 43, 12, 40, 5);
+      g.fillStyle(0x456b70).fillRoundedRect(18, 72, 38, 12, 6);
+      g.fillStyle(palette.sun, 0.12).fillCircle(37, 33, 31);
+      g.lineStyle(4, palette.mint, 0.7).strokeCircle(37, 33, 23);
+      g.lineStyle(3, palette.sun, 0.75).arc(37, 36, 15, Math.PI, Math.PI * 2, false);
+      g.fillStyle(0xfff0a8).fillCircle(37, 39, 6);
+      g.fillStyle(0xffffff, 0.7).fillCircle(34, 36, 2);
+      g.lineStyle(3, palette.violet, 0.55).lineBetween(18, 23, 9, 14).lineBetween(56, 23, 65, 14);
     });
   }
 
@@ -1209,6 +1255,10 @@ class LumenwildScene extends Phaser.Scene {
     this.createNpc(880, 853, 'Pip', 'The Sunbell says bright things hide behind violet glass.');
     this.createNpc(2350, 794, 'Nema', 'The grotto mushrooms remember how high you dared to jump.');
     this.createNpc(4140, 525, 'Miri', 'Four memory petals make the wild hum in harmony. Find every hidden echo.');
+
+    this.createTrialShrine(1110, 808, 'sun-trial', 'SUN SONG');
+    this.createTrialShrine(3090, 813, 'moss-trial', 'ROOT RHYTHM');
+    this.createTrialShrine(4360, 678, 'moon-trial', 'MOON CADENCE');
   }
 
   private spawnMemoryPetal(id: string, x: number, y: number): void {
@@ -1267,6 +1317,105 @@ class LumenwildScene extends Phaser.Scene {
     this.burst(enemy.x, enemy.y - 5, palette.lime, 5, 65);
   }
 
+  private createTrialShrine(x: number, y: number, id: string, label: string): void {
+    const shrine = this.add.image(x, y, 'trial-bell').setDepth(5).setDataEnabled();
+    shrine.setData('trialId', id).setData('label', label);
+    shrine.setAlpha(this.completedTrials.has(id) ? 0.34 : 0.88);
+    const glow = this.add.circle(x, y - 18, 38, this.completedTrials.has(id) ? palette.mint : palette.sun, 0.045)
+      .setDepth(4)
+      .setBlendMode(Phaser.BlendModes.ADD);
+    shrine.setData('glow', glow);
+    this.tweens.add({
+      targets: glow,
+      scale: 1.3,
+      alpha: this.completedTrials.has(id) ? 0.015 : 0.08,
+      yoyo: true,
+      repeat: -1,
+      duration: 1500 + (x % 400),
+      ease: 'Sine.inOut',
+    });
+    this.trialShrines.push(shrine);
+  }
+
+  private updateTrials(): void {
+    if (this.activeTrialId) {
+      const remaining = this.enemies.getChildren().filter(child => {
+        const enemy = child as Phaser.Physics.Arcade.Sprite;
+        return enemy.active && enemy.getData('trialId') === this.activeTrialId;
+      }).length;
+      if (remaining === 0) this.completeTrial(this.activeTrialId);
+      return;
+    }
+
+    for (const shrine of this.trialShrines) {
+      const id = shrine.getData('trialId') as string;
+      if (this.completedTrials.has(id)) continue;
+      if (Phaser.Math.Distance.Between(this.player.x, this.player.y, shrine.x, shrine.y) < 76) {
+        this.startTrial(id, shrine.getData('label') as string, shrine.x, shrine.y);
+        break;
+      }
+    }
+  }
+
+  private startTrial(id: string, label: string, x: number, y: number): void {
+    this.activeTrialId = id;
+    this.toast(`RESONANCE TRIAL — ${label}. Clear every echo.`, 2600);
+    this.ring(x, y - 18, palette.sun);
+    this.cameraShake(100, 0.002);
+
+    const spawnSlime = (sx: number, sy: number) => {
+      const e = this.enemies.create(sx, sy, 'slime-sheet', 'bounce0') as Phaser.Physics.Arcade.Sprite;
+      e.play('slime-bounce');
+      e.setDepth(7).setSize(39, 27).setOffset(10, 17).setBounce(0.1).setDataEnabled();
+      e.setData('hp', 2).setData('kind', 'slime').setData('left', sx - 95).setData('right', sx + 95).setData('dir', 1).setData('trialId', id);
+    };
+    const spawnWing = (sx: number, sy: number) => {
+      const e = this.enemies.create(sx, sy, 'glowwing') as Phaser.Physics.Arcade.Sprite;
+      (e.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
+      e.setDepth(7).setSize(42, 29).setOffset(7, 6).setDataEnabled();
+      e.setData('hp', 2).setData('kind', 'glowwing').setData('homeY', sy).setData('left', sx - 130).setData('right', sx + 130).setData('dir', -1).setData('trialId', id);
+    };
+    const spawnPod = (sx: number, sy: number) => {
+      const e = this.enemies.create(sx, sy, 'thornpod') as Phaser.Physics.Arcade.Sprite;
+      e.setDepth(7).setSize(40, 50).setOffset(7, 12).setDataEnabled().setImmovable(true);
+      e.setData('hp', 3).setData('kind', 'thornpod').setData('dir', -1).setData('nextShot', this.time.now + 700).setData('trialId', id);
+    };
+
+    if (id === 'sun-trial') {
+      spawnSlime(1015, 824);
+      spawnSlime(1205, 824);
+      spawnWing(1110, 650);
+    } else if (id === 'moss-trial') {
+      spawnSlime(3000, 829);
+      spawnWing(3140, 650);
+      spawnPod(3210, 806);
+    } else {
+      spawnWing(4260, 565);
+      spawnWing(4460, 555);
+      spawnPod(4360, 681);
+    }
+  }
+
+  private completeTrial(id: string): void {
+    this.completedTrials.add(id);
+    this.activeTrialId = '';
+    this.shards += 3;
+    this.health = this.maxHealth;
+    const shrine = this.trialShrines.find(item => item.getData('trialId') === id);
+    shrine?.setAlpha(0.34);
+    const glow = shrine?.getData('glow') as Phaser.GameObjects.Arc | undefined;
+    glow?.setFillStyle(palette.mint, 1);
+    this.soundscape.victory();
+    this.cameras.main.flash(260, 140, 255, 190);
+    if (this.completedTrials.size >= 3) {
+      this.toast('JOYBLADE AWAKENED! Every swipe now carries twice the resonance.', 3600);
+    } else {
+      this.toast(`TRIAL COMPLETE — +3 joy shards. Resonance ${this.completedTrials.size}/3.`, 2600);
+    }
+    this.updateHud();
+    this.save();
+  }
+
   private setupCollisions(): void {
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.collider(this.player, this.breakables);
@@ -1302,7 +1451,7 @@ class LumenwildScene extends Phaser.Scene {
   private setupControls(): void {
     const keyboard = this.input.keyboard!;
     const cursors = keyboard.createCursorKeys();
-    const wasd = keyboard.addKeys('W,A,S,D,SPACE,SHIFT,J,R,M') as Record<string, Phaser.Input.Keyboard.Key>;
+    const wasd = keyboard.addKeys('W,A,S,D,SPACE,SHIFT,J,R,M,P') as Record<string, Phaser.Input.Keyboard.Key>;
     this.keys = {
       left: wasd.A,
       right: wasd.D,
@@ -1313,6 +1462,8 @@ class LumenwildScene extends Phaser.Scene {
       attack: wasd.J,
       restart: wasd.R,
       map: wasd.M,
+      pause: wasd.P,
+      escape: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC),
       arrowLeft: cursors.left,
       arrowRight: cursors.right,
       arrowUp: cursors.up,
@@ -1327,9 +1478,9 @@ class LumenwildScene extends Phaser.Scene {
     return Phaser.Input.Keyboard.JustDown(key) || Boolean(alt && Phaser.Input.Keyboard.JustDown(alt));
   }
 
-  private padState(): { x: number; jump: boolean; dash: boolean; attack: boolean; map: boolean } {
+  private padState(): { x: number; jump: boolean; dash: boolean; attack: boolean; map: boolean; pause: boolean } {
     const pad = this.input.gamepad?.getPad(0);
-    if (!pad) return { x: 0, jump: false, dash: false, attack: false, map: false };
+    if (!pad) return { x: 0, jump: false, dash: false, attack: false, map: false, pause: false };
     const axis = Math.abs(pad.leftStick.x) > 0.18 ? pad.leftStick.x : 0;
     return {
       x: axis,
@@ -1337,6 +1488,7 @@ class LumenwildScene extends Phaser.Scene {
       dash: Boolean(pad.X || pad.R1),
       attack: Boolean(pad.B || pad.Y),
       map: Boolean(pad.buttons[8]?.pressed),
+      pause: Boolean(pad.buttons[9]?.pressed),
     };
   }
 
@@ -1381,6 +1533,11 @@ class LumenwildScene extends Phaser.Scene {
       }
     }
 
+    const holdingJump = this.isDown(this.keys.jump) || this.isDown(this.keys.up, this.keys.arrowUp) || pad.jump;
+    this.gliding = this.abilities.glide && !onGround && !this.dashing && body.velocity.y > 25 && holdingJump;
+    this.player.setGravityY(this.gliding ? -760 : 0);
+    if (this.gliding && body.velocity.y > 185) this.player.setVelocityY(185);
+
     const dashPressed = Phaser.Input.Keyboard.JustDown(this.keys.dash) || (pad.dash && !this.player.getData('padDashHeld'));
     this.player.setData('padDashHeld', pad.dash);
     if (dashPressed) this.tryDash(time);
@@ -1402,6 +1559,8 @@ class LumenwildScene extends Phaser.Scene {
     }
     if (time < this.dashReadyAt || this.dashing) return;
     this.dashing = true;
+    this.gliding = false;
+    this.player.setGravityY(0);
     this.player.play('player-dash', true);
     this.dashReadyAt = time + 620;
     this.soundscape.dash();
@@ -1409,7 +1568,7 @@ class LumenwildScene extends Phaser.Scene {
     body.allowGravity = false;
     this.player.setAcceleration(0).setVelocity(this.facing * 650, 0);
     this.player.setTint(0xb9ffff);
-    this.cameras.main.shake(90, 0.0025);
+    this.cameraShake(90, 0.0025);
     this.burst(this.player.x, this.player.y, palette.sky, 12, 220);
     this.time.delayedCall(155, () => {
       if (!this.player.active) return;
@@ -1433,7 +1592,7 @@ class LumenwildScene extends Phaser.Scene {
     this.physics.add.existing(zone);
     const zoneBody = zone.body as Phaser.Physics.Arcade.Body;
     zoneBody.setAllowGravity(false);
-    this.physics.add.overlap(zone, this.enemies, (_z, enemy) => this.damageEnemy(enemy as Phaser.Physics.Arcade.Sprite, 1));
+    this.physics.add.overlap(zone, this.enemies, (_z, enemy) => this.damageEnemy(enemy as Phaser.Physics.Arcade.Sprite, this.completedTrials.size >= 3 ? 2 : 1));
     this.physics.add.overlap(zone, this.projectiles, (_z, projectile) => {
       const seed = projectile as Phaser.Physics.Arcade.Sprite;
       if (!seed.active) return;
@@ -1474,6 +1633,9 @@ class LumenwildScene extends Phaser.Scene {
 
     if (this.dashing) {
       this.player.play('player-dash', true);
+    } else if (this.gliding) {
+      this.player.play('player-fall', true);
+      this.player.setAngle(this.facing * -3);
     } else if (this.attacking) {
       this.player.play('player-attack', true);
     } else if (time < this.invulnerableUntil - 620) {
@@ -1503,6 +1665,25 @@ class LumenwildScene extends Phaser.Scene {
         duration: 180,
         ease: 'Quad.out',
         onComplete: () => ghost.destroy(),
+      });
+    }
+
+    if (this.gliding && time - this.lastGlidePetalAt > 95) {
+      this.lastGlidePetalAt = time;
+      const wing = this.add.image(this.player.x - this.facing * 4, this.player.y + 5, 'petal')
+        .setDepth(7)
+        .setAlpha(0.6)
+        .setScale(0.8 + Math.random() * 0.25)
+        .setAngle(this.facing > 0 ? 25 : -25);
+      this.tweens.add({
+        targets: wing,
+        x: wing.x - this.facing * (18 + Math.random() * 18),
+        y: wing.y + 25 + Math.random() * 18,
+        angle: wing.angle + (this.facing > 0 ? 80 : -80),
+        alpha: 0,
+        duration: 420,
+        ease: 'Quad.out',
+        onComplete: () => wing.destroy(),
       });
     }
 
@@ -1597,7 +1778,7 @@ class LumenwildScene extends Phaser.Scene {
           enemy.setData('wasAirborne', false);
           this.ring(enemy.x, enemy.y + 37, phase === 2 ? palette.sun : palette.violet);
           this.burst(enemy.x, enemy.y + 42, phase === 2 ? palette.pink : palette.violet, phase === 2 ? 15 : 10, 165);
-          this.cameras.main.shake(phase === 2 ? 145 : 90, phase === 2 ? 0.005 : 0.003);
+          this.cameraShake(phase === 2 ? 145 : 90, phase === 2 ? 0.005 : 0.003);
         }
 
         const telegraphWindow = phase === 2 ? 260 : 350;
@@ -1712,7 +1893,7 @@ class LumenwildScene extends Phaser.Scene {
     this.time.delayedCall(70, () => enemy.active && enemy.clearTint());
     enemy.setVelocityX(this.facing * 220);
     this.burst(enemy.x, enemy.y, enemy.getData('kind') === 'boss' ? palette.pink : palette.sky, 8, 160);
-    this.cameras.main.shake(65, 0.0025);
+    this.cameraShake(65, 0.0025);
     if (hp <= 0) {
       const kind = enemy.getData('kind') as string;
       const boss = kind === 'boss';
@@ -1729,9 +1910,10 @@ class LumenwildScene extends Phaser.Scene {
         this.save();
       } else if (miniboss) {
         this.minibossDefeated = true;
+        this.abilities.glide = true;
         this.soundscape.unlockAbility();
         this.cameras.main.flash(320, 130, 255, 175);
-        this.toast('BRAMBLEHEART BLOOMS! A memory petal drifts free.', 3000);
+        this.toast('BLOOM GLIDE AWAKENED! Hold jump while falling to ride the petals.', 3600);
         this.spawnMemoryPetal('brambleheart', deathX, deathY - 36);
         this.save();
       }
@@ -1746,7 +1928,7 @@ class LumenwildScene extends Phaser.Scene {
     this.soundscape.hit();
     this.player.setVelocity((this.player.x - sourceX >= 0 ? 1 : -1) * 260, -290);
     this.player.setTintFill(0xffd2d8);
-    this.cameras.main.shake(180, 0.007);
+    this.cameraShake(180, 0.007);
     this.updateHud();
     this.tweens.add({ targets: this.player, alpha: 0.35, yoyo: true, repeat: 5, duration: 75, onComplete: () => { this.player.setAlpha(1); this.player.clearTint(); } });
     if (this.health <= 0) this.time.delayedCall(260, () => this.respawn());
@@ -1755,7 +1937,9 @@ class LumenwildScene extends Phaser.Scene {
   private respawn(): void {
     this.health = this.maxHealth;
     this.dashing = false;
+    this.gliding = false;
     const body = this.player.body as Phaser.Physics.Arcade.Body;
+    this.player.setGravityY(0);
     body.allowGravity = true;
     this.player.clearTint().setAlpha(1).setScale(1).setAngle(0).setVelocity(0).setPosition(this.checkpoint.x, this.checkpoint.y);
     this.player.play('player-idle', true);
@@ -1834,7 +2018,7 @@ class LumenwildScene extends Phaser.Scene {
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wall.x, wall.y) < 105) {
         this.burst(wall.x, wall.y, palette.violet, 22, 300);
         wall.disableBody(true, true);
-        this.cameras.main.shake(220, 0.009);
+        this.cameraShake(220, 0.009);
         const secretId = wall.getData('secretId') as string | undefined;
         this.toast(
           wall.getData('gate')
@@ -1863,7 +2047,7 @@ class LumenwildScene extends Phaser.Scene {
     this.cameras.main.flash(900, 255, 229, 160);
     const panel = this.add.rectangle(640, 360, 720, 390, 0x071326, 0.9).setScrollFactor(0).setDepth(100).setStrokeStyle(3, palette.sun, 0.65);
     const title = this.add.text(640, 265, 'THE WILD IS GLOWING AGAIN', { fontFamily: 'system-ui, sans-serif', fontSize: '42px', fontStyle: '900', color: '#fff3b0', align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
-    const body = this.add.text(640, 350, `You found ${this.shards} joy shards, recovered ${this.memoryPetals.size}/4 memory petals, and taught the Gloomkeeper a brighter rhythm.\n\nLumenwild is a small world, but it remembers every brave little jump.`, { fontFamily: 'system-ui, sans-serif', fontSize: '21px', color: '#dffcff', align: 'center', lineSpacing: 8, wordWrap: { width: 590 } }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
+    const body = this.add.text(640, 350, `You found ${this.shards} joy shards, recovered ${this.memoryPetals.size}/4 memory petals, completed ${this.completedTrials.size}/3 resonance trials, and taught the Gloomkeeper a brighter rhythm.\n\nLumenwild is a small world, but it remembers every brave little jump.`, { fontFamily: 'system-ui, sans-serif', fontSize: '21px', color: '#dffcff', align: 'center', lineSpacing: 8, wordWrap: { width: 590 } }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
     const hint = this.add.text(640, 485, 'Press R to wander again', { fontFamily: 'system-ui, sans-serif', fontSize: '17px', color: '#9fe7c7' }).setOrigin(0.5).setScrollFactor(0).setDepth(101);
     this.tweens.add({ targets: [panel, title, body, hint], alpha: { from: 0, to: 1 }, y: '-=16', duration: 700, ease: 'Cubic.out' });
     this.input.keyboard?.on('keydown-R', () => this.scene.restart());
@@ -1977,6 +2161,96 @@ class LumenwildScene extends Phaser.Scene {
     this.updateHud();
   }
 
+  private cameraShake(duration: number, intensity: number): void {
+    if (this.screenShakeEnabled) this.cameras.main.shake(duration, intensity);
+  }
+
+  private createPauseOverlay(): void {
+    const shade = this.add.rectangle(640, 360, 1280, 720, 0x020611, 0.82);
+    const panel = this.add.rectangle(640, 350, 540, 480, 0x071326, 0.98)
+      .setStrokeStyle(2, palette.mint, 0.3);
+    const title = this.add.text(640, 155, 'PAUSED IN THE WILD', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '28px',
+      fontStyle: '900',
+      color: '#f3fff7',
+      letterSpacing: 3,
+    }).setOrigin(0.5);
+    const sub = this.add.text(640, 197, 'Take the trail at your own rhythm.', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '13px',
+      color: '#abdacf',
+    }).setOrigin(0.5);
+
+    const button = (y: number, text: string, color: string, onClick: () => void) => {
+      const t = this.add.text(640, y, text, {
+        fontFamily: 'system-ui, sans-serif',
+        fontSize: '17px',
+        fontStyle: '800',
+        color,
+        backgroundColor: '#0b1d31dd',
+        padding: { x: 22, y: 11 },
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      t.on('pointerover', () => t.setScale(1.035));
+      t.on('pointerout', () => t.setScale(1));
+      t.on('pointerdown', onClick);
+      return t;
+    };
+
+    const resume = button(257, 'RESUME  •  P / ESC / START', '#efffff', () => this.togglePause());
+    this.pauseAudioText = button(315, '', '#ffe8a0', () => {
+      this.audioEnabled = !this.audioEnabled;
+      this.soundscape.setEnabled(this.audioEnabled);
+      this.refreshPauseSettings();
+      this.save();
+    });
+    this.pauseShakeText = button(373, '', '#c9ffe6', () => {
+      this.screenShakeEnabled = !this.screenShakeEnabled;
+      this.refreshPauseSettings();
+      this.save();
+    });
+    const mapHint = this.add.text(640, 435, 'M / SELECT opens the field map during play', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '12px',
+      color: '#a7cbd0',
+    }).setOrigin(0.5);
+    const reset = button(491, 'RESET PROGRESS', '#ffadbd', () => {
+      localStorage.removeItem(SAVE_KEY);
+      this.physics.world.resume();
+      this.scene.restart();
+    });
+    const caution = this.add.text(640, 535, 'Reset clears abilities, memories, trials, and boss progress.', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '10px',
+      color: '#8eaab0',
+    }).setOrigin(0.5);
+
+    this.pauseOverlay = this.add.container(0, 0, [
+      shade, panel, title, sub, resume, this.pauseAudioText, this.pauseShakeText, mapHint, reset, caution,
+    ]).setScrollFactor(0).setDepth(110).setVisible(false);
+    this.refreshPauseSettings();
+  }
+
+  private refreshPauseSettings(): void {
+    this.pauseAudioText?.setText(`AUDIO  •  ${this.audioEnabled ? 'ON' : 'OFF'}`);
+    this.pauseShakeText?.setText(`SCREEN SHAKE  •  ${this.screenShakeEnabled ? 'ON' : 'OFF'}`);
+  }
+
+  private togglePause(): void {
+    this.pauseOpen = !this.pauseOpen;
+    if (this.pauseOpen) {
+      if (this.mapOpen) {
+        this.mapOpen = false;
+        this.mapOverlay.setVisible(false);
+      }
+      this.pauseOverlay.setVisible(true);
+      this.physics.world.pause();
+    } else {
+      this.pauseOverlay.setVisible(false);
+      this.physics.world.resume();
+    }
+  }
+
   private createMapOverlay(): void {
     const shade = this.add.rectangle(640, 360, 1280, 720, 0x020713, 0.86);
     const panel = this.add.rectangle(640, 350, 760, 500, 0x071326, 0.97)
@@ -2070,13 +2344,14 @@ class LumenwildScene extends Phaser.Scene {
   }
 
   private toggleMap(): void {
+    if (this.pauseOpen) return;
     this.mapOpen = !this.mapOpen;
     this.mapOverlay.setVisible(this.mapOpen);
     if (this.mapOpen) {
       this.player.setAccelerationX(0).setVelocityX(0);
       this.physics.world.pause();
       this.updateMapMarker();
-      this.cameras.main.shake(60, 0.001);
+      this.cameraShake(60, 0.001);
     } else {
       this.physics.world.resume();
     }
@@ -2090,6 +2365,7 @@ class LumenwildScene extends Phaser.Scene {
     this.mapStatusText.setText(
       `${this.biome || 'SUNMEADOW'}   •   ${this.memoryPetals.size}/4 MEMORY PETALS   •   ` +
       `${this.minibossDefeated ? 'BRAMBLEHEART BLOOMED' : 'BRAMBLEHEART STIRS'}   •   ` +
+      `${this.abilities.glide ? 'BLOOM GLIDE' : 'GLIDE DORMANT'}   •   TRIALS ${this.completedTrials.size}/3   •   ` +
       `${this.memoryPetals.size >= 4 ? 'HEART BLOOM AWAKENED' : 'HEART BLOOM DORMANT'}   •   ` +
       `${this.bossDefeated ? 'GLOOMKEEPER RESTORED' : 'CANOPY GUARDIAN AWAITS'}`,
     );
@@ -2100,7 +2376,9 @@ class LumenwildScene extends Phaser.Scene {
     this.shardText.setText(`✦  ${this.shards} SHARDS     ❀  ${this.memoryPetals.size}/4 MEMORIES`);
     const dash = this.abilities.dash ? '↠ SHIFT  SKY DASH' : '◇ DASH DORMANT';
     const jump = this.abilities.doubleJump ? '✦ SPACE×2  PETAL LEAP' : '◇ LEAP DORMANT';
-    this.abilityText.setText(`${dash}     ${jump}     ⚔ J  SWIPE     M  MAP`);
+    const glide = this.abilities.glide ? '❀ HOLD SPACE  BLOOM GLIDE' : '◇ GLIDE DORMANT';
+    const blade = this.completedTrials.size >= 3 ? '⚔ JOYBLADE' : '⚔ J  SWIPE';
+    this.abilityText.setText(`${dash}     ${jump}     ${glide}     ${blade}     M  MAP`);
   }
 
   private updateBiome(): void {
@@ -2210,7 +2488,7 @@ class LumenwildScene extends Phaser.Scene {
       yoyo: true,
       onComplete: () => { eyebrow.destroy(); name.destroy(); hint.destroy(); },
     });
-    this.cameras.main.shake(110, 0.0018);
+    this.cameraShake(110, 0.0018);
   }
 
   private showBossIntro(): void {
@@ -2266,10 +2544,18 @@ class LumenwildScene extends Phaser.Scene {
         this.cameras.main.zoomTo(1, 520, 'Sine.easeInOut');
       },
     });
-    this.cameras.main.shake(180, 0.002);
+    this.cameraShake(180, 0.002);
   }
 
   private updateObjective(): void {
+    if (this.activeTrialId) {
+      const remaining = this.enemies.getChildren().filter(child => {
+        const enemy = child as Phaser.Physics.Arcade.Sprite;
+        return enemy.active && enemy.getData('trialId') === this.activeTrialId;
+      }).length;
+      this.objectiveText.setText(`Resonance Trial active — defeat ${remaining} echo${remaining === 1 ? '' : 'es'}`);
+      return;
+    }
     let text = 'Climb toward the bright pulse above →';
     if (this.abilities.dash && this.player.x < 2050) text = 'Dash through the crystal gate →';
     else if (this.abilities.dash && !this.abilities.doubleJump) text = 'Find the pink pulse in the grotto →';
@@ -2336,7 +2622,7 @@ class LumenwildScene extends Phaser.Scene {
     }).setOrigin(0.5).setScrollFactor(0).setDepth(93);
 
     const divider = this.add.rectangle(640, 372, 350, 2, palette.mint, 0.18).setScrollFactor(0).setDepth(92);
-    const controls = this.add.text(640, 421, 'MOVE  A D / ← →     JUMP  Space     ATTACK  J     MAP  M\nAbilities bloom as you explore  •  Gamepad supported', {
+    const controls = this.add.text(640, 421, 'MOVE  A D / ← →     JUMP  Space     ATTACK  J     MAP  M     PAUSE  P / Esc\nAbilities bloom as you explore  •  Gamepad supported', {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '17px',
       color: '#dbefff',
@@ -2377,12 +2663,19 @@ class LumenwildScene extends Phaser.Scene {
     try {
       const parsed = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null') as SaveState | null;
       if (parsed) {
-        this.abilities = { dash: Boolean(parsed.abilities?.dash), doubleJump: Boolean(parsed.abilities?.doubleJump) };
+        this.abilities = {
+          dash: Boolean(parsed.abilities?.dash),
+          doubleJump: Boolean(parsed.abilities?.doubleJump),
+          glide: Boolean(parsed.abilities?.glide || parsed.minibossDefeated),
+        };
         this.shards = Number.isFinite(parsed.shards) ? parsed.shards : 0;
         this.bossDefeated = Boolean(parsed.bossDefeated);
         this.memoryPetals = new Set(Array.isArray(parsed.petals) ? parsed.petals : []);
         this.minibossDefeated = Boolean(parsed.minibossDefeated);
         this.visitedBiomes = new Set(Array.isArray(parsed.visitedBiomes) ? parsed.visitedBiomes : []);
+        this.completedTrials = new Set(Array.isArray(parsed.completedTrials) ? parsed.completedTrials : []);
+        this.audioEnabled = parsed.settings?.audio ?? true;
+        this.screenShakeEnabled = parsed.settings?.screenShake ?? true;
         if (this.memoryPetals.size >= 4) {
           this.maxHealth = 6;
           this.health = 6;
@@ -2401,6 +2694,8 @@ class LumenwildScene extends Phaser.Scene {
       petals: [...this.memoryPetals],
       minibossDefeated: this.minibossDefeated,
       visitedBiomes: [...this.visitedBiomes],
+      completedTrials: [...this.completedTrials],
+      settings: { audio: this.audioEnabled, screenShake: this.screenShakeEnabled },
     };
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
   }
