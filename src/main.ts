@@ -155,7 +155,10 @@ class LumenwildScene extends Phaser.Scene {
   private biomeWash!: Phaser.GameObjects.Rectangle;
   private bossBarGroup!: Phaser.GameObjects.Container;
   private bossBarFill!: Phaser.GameObjects.Rectangle;
+  private miniBarGroup!: Phaser.GameObjects.Container;
+  private miniBarFill!: Phaser.GameObjects.Rectangle;
   private bossIntroPlayed = false;
+  private miniIntroPlayed = false;
   private mapOpen = false;
   private mapPadHeld = false;
   private mapOverlay!: Phaser.GameObjects.Container;
@@ -396,7 +399,7 @@ class LumenwildScene extends Phaser.Scene {
         const a = -Math.PI / 2 + i * (Math.PI * 2 / 5);
         const x = 21 + Math.cos(a) * 10;
         const y = 21 + Math.sin(a) * 10;
-        g.fillStyle(i % 2 ? 0xffbddc : 0xffe0ef, 0.95).fillEllipse(x, y, 13, 8, a);
+        g.fillStyle(i % 2 ? 0xffbddc : 0xffe0ef, 0.95).fillEllipse(x, y, 13, 8);
       }
       g.fillStyle(palette.sun).fillCircle(21, 21, 5);
       g.fillStyle(0xffffff, 0.7).fillCircle(19, 19, 2);
@@ -413,8 +416,8 @@ class LumenwildScene extends Phaser.Scene {
 
     make('glowwing', 56, 40, g => {
       g.fillStyle(palette.sky, 0.16).fillCircle(28, 20, 19);
-      g.fillStyle(0xa9f6ff, 0.5).fillEllipse(13, 20, 24, 13, -0.4);
-      g.fillStyle(0xa9f6ff, 0.5).fillEllipse(43, 20, 24, 13, 0.4);
+      g.fillStyle(0xa9f6ff, 0.5).fillEllipse(13, 20, 24, 13);
+      g.fillStyle(0xa9f6ff, 0.5).fillEllipse(43, 20, 24, 13);
       g.fillStyle(0x244a68).fillEllipse(28, 21, 18, 27);
       g.fillStyle(palette.mint).fillCircle(28, 14, 8);
       g.fillStyle(palette.white).fillCircle(25, 13, 2.7).fillCircle(31, 13, 2.7);
@@ -424,7 +427,7 @@ class LumenwildScene extends Phaser.Scene {
 
     make('thornpod', 54, 64, g => {
       g.fillStyle(0x214638).fillRoundedRect(24, 31, 7, 31, 3);
-      g.fillStyle(0x426a48).fillEllipse(16, 47, 25, 10, -0.6).fillEllipse(39, 49, 25, 10, 0.6);
+      g.fillStyle(0x426a48).fillEllipse(16, 47, 25, 10).fillEllipse(39, 49, 25, 10);
       g.fillStyle(0x5e8a53).fillCircle(27, 25, 20);
       g.fillStyle(0x88bc62).fillCircle(27, 21, 15);
       g.fillStyle(0x18322f).fillCircle(21, 20, 3).fillCircle(33, 20, 3);
@@ -446,7 +449,7 @@ class LumenwildScene extends Phaser.Scene {
       g.fillStyle(0x173f38).fillRoundedRect(15, 35, 86, 55, 24);
       g.fillStyle(0x3b734c).fillCircle(58, 40, 35);
       g.fillStyle(0x66a65e).fillCircle(58, 36, 27);
-      g.fillStyle(palette.pink, 0.85).fillEllipse(26, 29, 25, 12, -0.7).fillEllipse(90, 29, 25, 12, 0.7);
+      g.fillStyle(palette.pink, 0.85).fillEllipse(26, 29, 25, 12).fillEllipse(90, 29, 25, 12);
       g.fillStyle(palette.sun).fillCircle(58, 38, 12);
       g.fillStyle(palette.white).fillCircle(49, 33, 6).fillCircle(67, 33, 6);
       g.fillStyle(0x18322f).fillCircle(51, 34, 3).fillCircle(69, 34, 3);
@@ -461,7 +464,7 @@ class LumenwildScene extends Phaser.Scene {
       g.fillStyle(0xb9f27c).fillCircle(26, 21, 14);
       g.fillStyle(0xf5fff9).fillCircle(21, 20, 4).fillCircle(31, 20, 4);
       g.fillStyle(palette.ink).fillCircle(22, 20, 2).fillCircle(32, 20, 2);
-      g.fillStyle(palette.pink).fillEllipse(12, 12, 18, 9, -0.8).fillEllipse(40, 12, 18, 9, 0.8);
+      g.fillStyle(palette.pink).fillEllipse(12, 12, 18, 9).fillEllipse(40, 12, 18, 9);
       g.fillStyle(palette.sun).fillCircle(26, 4, 4);
     });
   }
@@ -1205,7 +1208,7 @@ class LumenwildScene extends Phaser.Scene {
 
     this.createNpc(880, 853, 'Pip', 'The Sunbell says bright things hide behind violet glass.');
     this.createNpc(2350, 794, 'Nema', 'The grotto mushrooms remember how high you dared to jump.');
-    this.createNpc(4140, 525, 'Miri', 'Three memory petals make the wild hum in harmony.');
+    this.createNpc(4140, 525, 'Miri', 'Four memory petals make the wild hum in harmony. Find every hidden echo.');
   }
 
   private spawnMemoryPetal(id: string, x: number, y: number): void {
@@ -1431,6 +1434,13 @@ class LumenwildScene extends Phaser.Scene {
     const zoneBody = zone.body as Phaser.Physics.Arcade.Body;
     zoneBody.setAllowGravity(false);
     this.physics.add.overlap(zone, this.enemies, (_z, enemy) => this.damageEnemy(enemy as Phaser.Physics.Arcade.Sprite, 1));
+    this.physics.add.overlap(zone, this.projectiles, (_z, projectile) => {
+      const seed = projectile as Phaser.Physics.Arcade.Sprite;
+      if (!seed.active) return;
+      this.burst(seed.x, seed.y, palette.sun, 5, 75);
+      seed.destroy();
+      this.soundscape.collect();
+    });
     this.time.delayedCall(95, () => zone.destroy());
     this.time.delayedCall(210, () => { this.attacking = false; });
   }
@@ -1549,6 +1559,7 @@ class LumenwildScene extends Phaser.Scene {
 
   private updateEnemies(time: number): void {
     let bossPresented = false;
+    let miniPresented = false;
     this.enemies.getChildren().forEach(child => {
       const enemy = child as Phaser.Physics.Arcade.Sprite;
       if (!enemy.active) return;
@@ -1645,6 +1656,14 @@ class LumenwildScene extends Phaser.Scene {
 
       if (kind === 'miniboss') {
         const hp = enemy.getData('hp') as number;
+        const distanceToPlayer = Math.abs(this.player.x - enemy.x);
+        miniPresented = distanceToPlayer < 470 && hp > 0;
+        this.miniBarFill.setScale(Phaser.Math.Clamp(hp / 7, 0, 1), 1);
+        if (miniPresented && !this.miniIntroPlayed) {
+          this.miniIntroPlayed = true;
+          enemy.setData('nextCharge', time + 1150);
+          this.showMiniBossIntro();
+        }
         let dir = enemy.getData('dir') as number;
         const left = enemy.getData('left') as number;
         const right = enemy.getData('right') as number;
@@ -1678,6 +1697,7 @@ class LumenwildScene extends Phaser.Scene {
       enemy.setData('dir', dir).setVelocityX(dir * 68).setFlipX(dir < 0);
     });
     this.bossBarGroup.setAlpha(bossPresented ? 1 : 0);
+    this.miniBarGroup.setAlpha(miniPresented && !bossPresented ? 1 : 0);
   }
 
   private damageEnemy(enemy: Phaser.Physics.Arcade.Sprite, amount: number): void {
@@ -1763,7 +1783,15 @@ class LumenwildScene extends Phaser.Scene {
       const id = pickup.getData('id') as string;
       this.memoryPetals.add(id);
       this.cameras.main.flash(260, 255, 155, 215);
-      this.toast(`MEMORY PETAL ${this.memoryPetals.size}/4 — a hidden piece of Lumenwild remembers you.`, 2600);
+      if (this.memoryPetals.size >= 4 && this.maxHealth < 6) {
+        this.maxHealth = 6;
+        this.health = 6;
+        this.soundscape.unlockAbility();
+        this.ring(this.player.x, this.player.y, palette.sun);
+        this.toast('HEART BLOOM! Four memories resonate — maximum health increased.', 3600);
+      } else {
+        this.toast(`MEMORY PETAL ${this.memoryPetals.size}/4 — a hidden piece of Lumenwild remembers you.`, 2600);
+      }
     } else if (type === 'dash') {
       this.abilities.dash = true;
       this.soundscape.unlockAbility();
@@ -1927,6 +1955,24 @@ class LumenwildScene extends Phaser.Scene {
       .setDepth(68)
       .setAlpha(0);
 
+    const miniPlate = this.add.rectangle(640, 681, 470, 42, 0x071810, 0.84)
+      .setStrokeStyle(2, palette.lime, 0.24)
+      .setScrollFactor(0);
+    const miniLabel = this.add.text(640, 665, 'BRAMBLEHEART  •  ROOTBOUND DREAMER', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '10px',
+      fontStyle: '900',
+      color: '#e8ffd0',
+      letterSpacing: 1.7,
+    }).setOrigin(0.5).setScrollFactor(0);
+    const miniTrack = this.add.rectangle(420, 688, 440, 8, 0x173320, 0.9).setOrigin(0, 0.5).setScrollFactor(0);
+    this.miniBarFill = this.add.rectangle(420, 688, 440, 8, palette.lime, 0.9).setOrigin(0, 0.5).setScrollFactor(0);
+    const miniShine = this.add.rectangle(420, 686, 440, 2, 0xecffd2, 0.45).setOrigin(0, 0.5).setScrollFactor(0);
+    this.miniBarGroup = this.add.container(0, 0, [miniPlate, miniLabel, miniTrack, this.miniBarFill, miniShine])
+      .setScrollFactor(0)
+      .setDepth(67)
+      .setAlpha(0);
+
     leftPanel.setScrollFactor(0);
     this.updateHud();
   }
@@ -2044,6 +2090,7 @@ class LumenwildScene extends Phaser.Scene {
     this.mapStatusText.setText(
       `${this.biome || 'SUNMEADOW'}   •   ${this.memoryPetals.size}/4 MEMORY PETALS   •   ` +
       `${this.minibossDefeated ? 'BRAMBLEHEART BLOOMED' : 'BRAMBLEHEART STIRS'}   •   ` +
+      `${this.memoryPetals.size >= 4 ? 'HEART BLOOM AWAKENED' : 'HEART BLOOM DORMANT'}   •   ` +
       `${this.bossDefeated ? 'GLOOMKEEPER RESTORED' : 'CANOPY GUARDIAN AWAITS'}`,
     );
   }
@@ -2122,6 +2169,48 @@ class LumenwildScene extends Phaser.Scene {
       yoyo: true,
       onComplete: () => { title.destroy(); sub.destroy(); },
     });
+  }
+
+  private showMiniBossIntro(): void {
+    const wash = this.add.rectangle(640, 360, 1280, 720, 0x17391f, 0)
+      .setScrollFactor(0)
+      .setDepth(62);
+    const eyebrow = this.add.text(640, 262, 'A ROOTBOUND SONG WAKES', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '10px',
+      fontStyle: '900',
+      color: '#c9ffa4',
+      letterSpacing: 3.2,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(66).setAlpha(0);
+    const name = this.add.text(640, 305, 'BRAMBLEHEART', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '35px',
+      fontStyle: '900',
+      color: '#f2ffd8',
+      stroke: '#10251a',
+      strokeThickness: 7,
+      letterSpacing: 2.5,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(66).setAlpha(0);
+    const hint = this.add.text(640, 347, 'Its bloom hides a memory petal', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '12px',
+      fontStyle: '800',
+      color: '#b9e9c2',
+      letterSpacing: 1.5,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(66).setAlpha(0);
+
+    this.tweens.add({ targets: wash, alpha: 0.10, duration: 240, hold: 520, yoyo: true, onComplete: () => wash.destroy() });
+    this.tweens.add({
+      targets: [eyebrow, name, hint],
+      alpha: { from: 0, to: 1 },
+      y: '-=8',
+      duration: 300,
+      ease: 'Cubic.out',
+      hold: 620,
+      yoyo: true,
+      onComplete: () => { eyebrow.destroy(); name.destroy(); hint.destroy(); },
+    });
+    this.cameras.main.shake(110, 0.0018);
   }
 
   private showBossIntro(): void {
@@ -2294,6 +2383,10 @@ class LumenwildScene extends Phaser.Scene {
         this.memoryPetals = new Set(Array.isArray(parsed.petals) ? parsed.petals : []);
         this.minibossDefeated = Boolean(parsed.minibossDefeated);
         this.visitedBiomes = new Set(Array.isArray(parsed.visitedBiomes) ? parsed.visitedBiomes : []);
+        if (this.memoryPetals.size >= 4) {
+          this.maxHealth = 6;
+          this.health = 6;
+        }
       }
     } catch {
       localStorage.removeItem(SAVE_KEY);
