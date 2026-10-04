@@ -61,6 +61,12 @@ The production bundle is written to `dist/` and can be deployed to any static ho
 - two-phase Gloomkeeper presentation with attack telegraphs, landing impact VFX, and animated boss states
 - responsive 16:9 canvas that scales to the browser window
 
+## Art
+
+Lumenwild now combines its procedural lighting/VFX with selected **Kenney Platformer Pack Remastered** assets for the player, standard enemies, terrain, props, collectibles, and parallax scenery. These imported assets are **CC0**, so they can be redistributed and modified in the project. See `THIRD_PARTY_ASSETS.md` for provenance and licensing notes.
+
+The Sunmeadow opening traversal was also rebuilt so the Sky Dash upgrade is reachable with the starting jump: the ascent now uses a clear staircase of sub-100px vertical gaps before the first dash gate.
+
 ## Tech
 
 - TypeScript
