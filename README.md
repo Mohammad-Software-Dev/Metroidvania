@@ -59,4 +59,12 @@ The production bundle is written to `dist/` and can be deployed to any static ho
 
 ## Deployment
 
-Because Vite is configured with `base: './'`, the generated `dist/` works on static subpaths as well as root domains. For GitHub Pages, build the project and publish `dist/` through your preferred Pages workflow.
+A GitHub Pages workflow is included at `.github/workflows/pages.yml`. The repository needs one one-time GitHub setting before the deployment can publish:
+
+1. Open **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Re-run **Deploy game to GitHub Pages** from the Actions tab, or push another commit.
+
+The workflow installs dependencies, runs the production Vite build, uploads `dist/` as the Pages artifact, and deploys it through the `github-pages` environment.
+
+Because Vite is configured with `base: './'`, the generated `dist/` works on the repository subpath as well as other static hosts.
