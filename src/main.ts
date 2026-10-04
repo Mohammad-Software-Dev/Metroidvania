@@ -468,9 +468,9 @@ class LumenwildScene extends Phaser.Scene {
     const axis = Math.abs(pad.leftStick.x) > 0.18 ? pad.leftStick.x : 0;
     return {
       x: axis,
-      jump: pad.A,
-      dash: pad.X || pad.R1,
-      attack: pad.B || pad.Y,
+      jump: Boolean(pad.A),
+      dash: Boolean(pad.X || pad.R1),
+      attack: Boolean(pad.B || pad.Y),
     };
   }
 
