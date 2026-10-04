@@ -191,6 +191,28 @@ class LumenwildScene extends Phaser.Scene {
 
   constructor() { super('lumenwild'); }
 
+  preload(): void {
+    this.load.setPath('./assets/kenney');
+    this.load.image('kenney-player-stand', 'player_stand.png');
+    this.load.image('kenney-player-walk1', 'player_walk1.png');
+    this.load.image('kenney-player-walk2', 'player_walk2.png');
+    this.load.image('kenney-player-jump', 'player_jump.png');
+    this.load.image('kenney-player-hit', 'player_hit.png');
+    this.load.image('kenney-slime-idle', 'slime_idle.png');
+    this.load.image('kenney-slime-move', 'slime_move.png');
+    this.load.image('kenney-bee-idle', 'bee_idle.png');
+    this.load.image('kenney-bee-move', 'bee_move.png');
+    this.load.image('kenney-grass-platform', 'grass_platform.png');
+    this.load.image('kenney-bush', 'bush.png');
+    this.load.image('kenney-mushroom-red', 'mushroom_red.png');
+    this.load.image('kenney-mushroom-brown', 'mushroom_brown.png');
+    this.load.image('kenney-plant-purple', 'plant_purple.png');
+    this.load.image('kenney-rock', 'rock.png');
+    this.load.image('kenney-gem-yellow', 'gem_yellow.png');
+    this.load.image('kenney-bg-grass', 'background_grass.png');
+    this.load.image('kenney-bg-shroom', 'background_shroom.png');
+  }
+
   create(): void {
     this.loadSave();
     this.soundscape.setEnabled(this.audioEnabled);
@@ -826,17 +848,29 @@ class LumenwildScene extends Phaser.Scene {
     const make = (key: string, frames: Phaser.Types.Animations.AnimationFrame[], frameRate: number, repeat = -1) => {
       if (!this.anims.exists(key)) this.anims.create({ key, frames, frameRate, repeat });
     };
-    const p = (name: string) => ({ key: 'player-sheet', frame: name });
-    make('player-idle', ['idle0', 'idle1', 'idle2', 'idle3'].map(p), 5);
-    make('player-run', ['run0', 'run1', 'run2', 'run3'].map(p), 11);
-    make('player-jump', [p('jump')], 1);
-    make('player-fall', [p('fall')], 1);
-    make('player-attack', ['attack0', 'attack1', 'attack2'].map(p), 14, 0);
-    make('player-dash', [p('dash')], 1);
-    make('player-hurt', [p('hurt')], 1);
+    make('player-idle', [{ key: 'kenney-player-stand' }], 1);
+    make('player-run', [
+      { key: 'kenney-player-walk1' },
+      { key: 'kenney-player-walk2' },
+    ], 8);
+    make('player-jump', [{ key: 'kenney-player-jump' }], 1);
+    make('player-fall', [{ key: 'kenney-player-jump' }], 1);
+    make('player-attack', [
+      { key: 'kenney-player-walk1' },
+      { key: 'kenney-player-stand' },
+      { key: 'kenney-player-walk2' },
+    ], 15, 0);
+    make('player-dash', [{ key: 'kenney-player-jump' }], 1);
+    make('player-hurt', [{ key: 'kenney-player-hit' }], 1);
 
-    const slime = (name: string) => ({ key: 'slime-sheet', frame: name });
-    make('slime-bounce', ['bounce0', 'bounce1', 'bounce2', 'bounce3'].map(slime), 7);
+    make('slime-bounce', [
+      { key: 'kenney-slime-idle' },
+      { key: 'kenney-slime-move' },
+    ], 6);
+    make('bee-fly', [
+      { key: 'kenney-bee-idle' },
+      { key: 'kenney-bee-move' },
+    ], 10);
 
     const boss = (name: string) => ({ key: 'boss-sheet', frame: name });
     make('boss-idle', ['idle0', 'idle1'].map(boss), 3);
@@ -879,10 +913,31 @@ class LumenwildScene extends Phaser.Scene {
       }
     }
 
+    // Authored CC0 platformer backgrounds sit underneath the original color language.
+    this.add.image(900, 575, 'kenney-bg-grass')
+      .setDisplaySize(1840, 1020)
+      .setAlpha(0.18)
+      .setTint(0x78d3b2)
+      .setScrollFactor(0.07)
+      .setDepth(-29);
+    this.add.image(2720, 575, 'kenney-bg-shroom')
+      .setDisplaySize(1840, 1020)
+      .setAlpha(0.20)
+      .setTint(0x69c6b8)
+      .setScrollFactor(0.07)
+      .setDepth(-29);
+    this.add.image(4540, 575, 'kenney-bg-grass')
+      .setDisplaySize(1840, 1020)
+      .setFlipX(true)
+      .setAlpha(0.17)
+      .setTint(0xa28bdf)
+      .setScrollFactor(0.07)
+      .setDepth(-29);
+
     // Biome haze — subtle color shifts behind the play space.
-    this.add.rectangle(900, 540, 1800, 1080, 0xffd56b, 0.035).setDepth(-28);
-    this.add.rectangle(2730, 540, 1760, 1080, 0x49c6ac, 0.045).setDepth(-28);
-    this.add.rectangle(4500, 540, 1800, 1080, 0x9b7bff, 0.06).setDepth(-28);
+    this.add.rectangle(900, 540, 1800, 1080, 0xffd56b, 0.025).setDepth(-28);
+    this.add.rectangle(2730, 540, 1760, 1080, 0x49c6ac, 0.03).setDepth(-28);
+    this.add.rectangle(4500, 540, 1800, 1080, 0x9b7bff, 0.04).setDepth(-28);
 
     // Sunmeadow distant flowers and soft tree crowns.
     for (let x = 110; x < 1850; x += 180) {
@@ -952,33 +1007,35 @@ class LumenwildScene extends Phaser.Scene {
   private addPlatform(x: number, y: number, w: number, h = 32): Phaser.Physics.Arcade.Sprite {
     const p = this.platforms.create(x, y, 'platform') as Phaser.Physics.Arcade.Sprite;
     p.setDisplaySize(w, h).setAlpha(0).refreshBody();
-    const frame = x < 1850 ? 'meadow' : x < 3600 ? 'grotto' : 'canopy';
-    this.add.tileSprite(x, y, w, h, 'terrain-sheet', frame)
+    const tint = x < 1850 ? 0xffffff : x < 3600 ? 0x9ed7c3 : 0xc0a8eb;
+    this.add.tileSprite(x, y, w, h, 'kenney-grass-platform')
       .setDepth(1)
-      .setTileScale(1, Math.max(0.82, h / 50));
+      .setTint(tint)
+      .setTileScale(0.52, 0.52);
     this.decoratePlatform(x, y, w, h);
     return p;
   }
 
   private decoratePlatform(x: number, y: number, w: number, h: number): void {
     const zone = x < 1850 ? 0 : x < 3600 ? 1 : 2;
-    const accent = [palette.sun, palette.mint, palette.pink][zone];
-    const count = Math.max(2, Math.floor(w / 120));
+    const count = Math.max(1, Math.floor(w / 145));
+    const propKeys = zone === 0
+      ? ['kenney-bush', 'kenney-rock']
+      : zone === 1
+        ? ['kenney-mushroom-red', 'kenney-mushroom-brown', 'kenney-rock']
+        : ['kenney-plant-purple', 'kenney-rock'];
+
     for (let i = 0; i < count; i++) {
-      const px = x - w * 0.42 + (i + 0.5) * (w * 0.84 / count);
-      if (zone === 0) {
-        const leaf = this.add.image(px, y - h * 0.55, 'leaf').setScale(0.62 + (i % 3) * 0.1).setDepth(3).setAlpha(0.86);
-        leaf.setAngle(i % 2 ? 13 : -11);
-      } else if (zone === 1) {
-        const fern = this.add.image(px, y - h * 0.58 - 18, 'fern').setScale(0.48 + (i % 2) * 0.08).setDepth(3).setAlpha(0.7);
-        fern.setFlipX(i % 2 === 0);
-      } else {
-        const bud = this.add.image(px, y - h * 0.56 - 13, 'crystal-bud').setScale(0.38 + (i % 3) * 0.06).setDepth(3).setAlpha(0.66);
-        this.tweens.add({ targets: bud, alpha: 0.92, yoyo: true, repeat: -1, duration: 1500 + i * 230, ease: 'Sine.inOut' });
-      }
-      if ((i + Math.round(x / 100)) % 3 === 0) {
-        this.add.circle(px + 12, y - h * 0.56 - 3, 3.2, accent, 0.75).setDepth(4);
-      }
+      const px = x - w * 0.38 + (i + 0.5) * (w * 0.76 / count);
+      const key = propKeys[(i + Math.round(x / 100)) % propKeys.length];
+      const prop = this.add.image(px, y - h * 0.48, key)
+        .setOrigin(0.5, 1)
+        .setDepth(3)
+        .setScale(key === 'kenney-rock' ? 0.24 : 0.30 + (i % 2) * 0.045)
+        .setAlpha(0.88);
+      if (zone === 1) prop.setTint(0xb8f2de);
+      if (zone === 2) prop.setTint(0xd4baff);
+      prop.setFlipX(i % 2 === 0);
     }
   }
 
@@ -1007,38 +1064,71 @@ class LumenwildScene extends Phaser.Scene {
   }
 
   private createForegroundDetails(): void {
-    const place = (x: number, y: number, key: string, scale: number, alpha: number, flip = false) => {
+    const place = (x: number, y: number, key: string, scale: number, alpha: number, tint?: number, flip = false) => {
       const image = this.add.image(x, y, key)
+        .setOrigin(0.5, 1)
         .setScale(scale)
         .setAlpha(alpha)
         .setFlipX(flip)
         .setDepth(24)
-        .setScrollFactor(1.035);
+        .setScrollFactor(1.025);
+      if (tint) image.setTint(tint);
       this.tweens.add({
         targets: image,
-        angle: { from: flip ? 2.5 : -2.5, to: flip ? -2.5 : 2.5 },
+        angle: { from: flip ? 1.4 : -1.4, to: flip ? -1.4 : 1.4 },
         yoyo: true,
         repeat: -1,
-        duration: 3600 + (Math.floor(x) % 1400),
+        duration: 4200 + (Math.floor(x) % 1100),
         ease: 'Sine.inOut',
       });
       return image;
     };
 
-    // Meadow leaves briefly sweep the lower frame edge.
-    place(350, 930, 'fern', 2.2, 0.12, false);
-    place(1020, 950, 'leaf', 4.4, 0.10, true);
-    place(1710, 925, 'fern', 2.0, 0.11, true);
+    // Meadow: bushes and stones replace the old vector leaves.
+    place(260, 955, 'kenney-bush', 1.05, 0.16, 0x78c887);
+    place(760, 958, 'kenney-rock', 0.78, 0.12, 0x5f9c87, true);
+    place(1480, 958, 'kenney-bush', 1.15, 0.14, 0x79c98a, true);
 
-    // Grotto silhouettes feel closer and denser.
-    place(2180, 905, 'mushroom', 2.3, 0.10, false);
-    place(2860, 930, 'fern', 2.8, 0.14, true);
-    place(3480, 910, 'mushroom', 2.0, 0.09, true);
+    // Grotto: authored mushrooms create recognizable silhouettes.
+    place(2140, 952, 'kenney-mushroom-red', 1.05, 0.17, 0x8fd3bd);
+    place(2820, 955, 'kenney-mushroom-brown', 1.3, 0.16, 0x86c7bb, true);
+    place(3420, 955, 'kenney-rock', 0.95, 0.13, 0x6fa99f);
 
-    // Canopy foreground crystal growths create depth near the boss arena.
-    place(3890, 920, 'crystal-bud', 2.8, 0.10, false);
-    place(4560, 930, 'crystal-bud', 3.4, 0.12, true);
-    place(5200, 920, 'fern', 2.4, 0.08, true);
+    // Canopy: purple plants and rocks frame the boss arena.
+    place(3860, 952, 'kenney-plant-purple', 1.15, 0.16, 0xb69bdf);
+    place(4550, 958, 'kenney-rock', 1.05, 0.13, 0x9a85c4, true);
+    place(5180, 952, 'kenney-plant-purple', 1.2, 0.14, 0xc5a9ed, true);
+  }
+
+  private createBarrierVisual(x: number, y: number, height: number, label: string): Phaser.GameObjects.GameObject[] {
+    const pieces: Phaser.GameObjects.GameObject[] = [];
+    const count = Math.max(3, Math.ceil(height / 82));
+    for (let i = 0; i < count; i++) {
+      const rock = this.add.image(x + (i % 2 ? 9 : -8), y - height / 2 + 45 + i * (height - 70) / Math.max(1, count - 1), 'kenney-rock')
+        .setScale(0.52 + (i % 3) * 0.08)
+        .setTint(i % 2 ? 0x8e74dc : 0xb39af2)
+        .setAlpha(0.96)
+        .setDepth(6)
+        .setAngle(i % 2 ? 12 : -9);
+      pieces.push(rock);
+    }
+    const vine = this.add.image(x + 3, y, 'kenney-plant-purple')
+      .setScale(0.75)
+      .setTint(0xc7a9ff)
+      .setAlpha(0.9)
+      .setDepth(7);
+    pieces.push(vine);
+    const text = this.add.text(x, y - height / 2 - 32, label, {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '9px',
+      fontStyle: '900',
+      color: '#d9ccff',
+      stroke: '#11142e',
+      strokeThickness: 3,
+      letterSpacing: 1.2,
+    }).setOrigin(0.5).setDepth(7).setAlpha(0.72);
+    pieces.push(text);
+    return pieces;
   }
 
   private createWorld(): void {
@@ -1049,11 +1139,10 @@ class LumenwildScene extends Phaser.Scene {
     // Sunmeadow
     this.addPlatform(460, GROUND_Y, 920, 55);
     this.addPlatform(1110, 865, 260, 34);
-    this.addPlatform(1420, 790, 240, 34);
-    this.addPlatform(1660, 885, 260, 34);
-    this.addPlatform(1280, 655, 210, 30);
-    this.addPlatform(1580, 560, 200, 30);
-    this.addPlatform(1770, 720, 170, 30);
+    this.addPlatform(1315, 780, 220, 32);
+    this.addPlatform(1510, 695, 220, 30);
+    this.addPlatform(1695, 780, 220, 32);
+    this.addPlatform(1810, 865, 210, 34);
 
     // Crystal threshold & Moss Grotto
     this.addPlatform(2060, GROUND_Y, 520, 55);
@@ -1074,10 +1163,13 @@ class LumenwildScene extends Phaser.Scene {
     this.addPlatform(5040, 790, 220, 32);
     this.addPlatform(5250, 650, 180, 32);
 
-    const wall = this.breakables.create(1940, 820, 'crystal') as Phaser.Physics.Arcade.Sprite;
-    wall.setPosition(1940, 720).setDisplaySize(96, 420).refreshBody().setData('gate', true);
+    const wall = this.breakables.create(1940, 720, 'crystal') as Phaser.Physics.Arcade.Sprite;
+    wall.setDisplaySize(86, 420).setAlpha(0).refreshBody().setData('gate', true);
+    wall.setData('visuals', this.createBarrierVisual(1940, 720, 420, 'SKY DASH GATE'));
+
     const upperCrystal = this.breakables.create(3660, 565, 'crystal') as Phaser.Physics.Arcade.Sprite;
-    upperCrystal.setDisplaySize(82, 270).refreshBody().setData('gate', false);
+    upperCrystal.setDisplaySize(76, 270).setAlpha(0).refreshBody().setData('gate', false);
+    upperCrystal.setData('visuals', this.createBarrierVisual(3660, 565, 270, 'RESONANT CRYSTAL'));
 
     [930, 2320, 2940, 3500, 4030, 4470].forEach((x, i) => {
       const spike = this.hazards.create(x, GROUND_Y - 39, 'spike') as Phaser.Physics.Arcade.Sprite;
@@ -1131,10 +1223,10 @@ class LumenwildScene extends Phaser.Scene {
   private createPlayer(): void {
     this.playerShadow = this.add.ellipse(this.checkpoint.x, this.checkpoint.y + 30, 48, 13, 0x020817, 0.34).setDepth(4);
     this.playerGlow = this.add.circle(this.checkpoint.x, this.checkpoint.y, 34, palette.mint, 0.10).setBlendMode(Phaser.BlendModes.ADD).setDepth(5);
-    this.player = this.physics.add.sprite(this.checkpoint.x, this.checkpoint.y, 'player-sheet', 'idle0');
-    this.player.play('player-idle');
+    this.player = this.physics.add.sprite(this.checkpoint.x, this.checkpoint.y, 'kenney-player-stand');
+    this.player.setScale(0.40).play('player-idle');
     this.player.setDepth(8).setBounce(0.02).setCollideWorldBounds(true);
-    this.player.setSize(30, 49).setOffset(21, 20);
+    this.player.setSize(74, 126).setOffset(29, 46);
     this.player.setMaxVelocity(470, 900);
     this.player.setDragX(1700);
     this.tweens.add({ targets: this.playerGlow, scale: 1.14, alpha: 0.055, yoyo: true, repeat: -1, duration: 1250, ease: 'Sine.inOut' });
@@ -1143,13 +1235,13 @@ class LumenwildScene extends Phaser.Scene {
   private createEnemies(): void {
     this.enemies = this.physics.add.group({ collideWorldBounds: true });
     const spawnSlime = (x: number, y: number, left: number, right: number) => {
-      const e = this.enemies.create(x, y, 'slime-sheet', 'bounce0') as Phaser.Physics.Arcade.Sprite;
-      e.play('slime-bounce');
-      e.setDepth(7).setSize(39, 27).setOffset(10, 17).setBounce(0.1).setDataEnabled();
+      const e = this.enemies.create(x, y, 'kenney-slime-idle') as Phaser.Physics.Arcade.Sprite;
+      e.setScale(0.44).play('slime-bounce');
+      e.setDepth(7).setSize(86, 58).setOffset(21, 55).setBounce(0.1).setDataEnabled();
       e.setData('hp', 2).setData('kind', 'slime').setData('left', left).setData('right', right).setData('dir', 1);
     };
     spawnSlime(780, 860, 620, 870);
-    spawnSlime(1510, 730, 1380, 1600);
+    spawnSlime(1510, 640, 1410, 1605);
     spawnSlime(2230, 860, 2070, 2300);
     spawnSlime(2770, 690, 2670, 2860);
     spawnSlime(3340, 630, 3240, 3420);
@@ -1166,21 +1258,22 @@ class LumenwildScene extends Phaser.Scene {
   private createPickups(): void {
     this.pickups = this.physics.add.group({ allowGravity: false, immovable: true });
     const shards = [
-      [520, 790], [1130, 800], [1320, 595], [1600, 500], [1780, 660],
+      [520, 790], [1130, 800], [1315, 720], [1450, 625], [1730, 720],
       [2390, 790], [2760, 690], [3060, 485], [3410, 390], [3860, 665],
       [4130, 525], [4390, 675], [5030, 730],
     ];
     shards.forEach(([x, y], i) => {
       const glow = this.add.circle(x, y, 18, palette.sun, 0.07).setDepth(5).setBlendMode(Phaser.BlendModes.ADD);
-      const s = this.pickups.create(x, y, 'shard') as Phaser.Physics.Arcade.Sprite;
+      const s = this.pickups.create(x, y, 'kenney-gem-yellow') as Phaser.Physics.Arcade.Sprite;
+      s.setDisplaySize(31, 31);
       s.setData('type', 'shard').setData('index', i).setData('glow', glow).setDepth(6);
       this.tweens.add({ targets: s, y: y - 12, angle: 8, yoyo: true, repeat: -1, duration: 1000 + (i % 4) * 130, ease: 'Sine.inOut' });
       this.tweens.add({ targets: glow, scale: 1.55, alpha: 0.015, yoyo: true, repeat: -1, duration: 1200 + (i % 4) * 150, ease: 'Sine.inOut' });
     });
 
     if (!this.abilities.dash) {
-      const dashGlow = this.add.circle(1590, 505, 48, palette.sky, 0.065).setDepth(5).setBlendMode(Phaser.BlendModes.ADD);
-      const dash = this.pickups.create(1590, 505, 'dash-orb') as Phaser.Physics.Arcade.Sprite;
+      const dashGlow = this.add.circle(1510, 632, 48, palette.sky, 0.065).setDepth(5).setBlendMode(Phaser.BlendModes.ADD);
+      const dash = this.pickups.create(1510, 632, 'dash-orb') as Phaser.Physics.Arcade.Sprite;
       dash.setData('type', 'dash').setData('glow', dashGlow).setDepth(6);
       this.tweens.add({ targets: dash, scale: 1.12, angle: 12, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.inOut' });
       this.tweens.add({ targets: dashGlow, scale: 1.35, alpha: 0.02, yoyo: true, repeat: -1, duration: 1500, ease: 'Sine.inOut' });
@@ -1211,7 +1304,7 @@ class LumenwildScene extends Phaser.Scene {
 
     // Three optional dash-gated alcoves, one in each biome.
     const secrets = [
-      { id: 'sun-echo', gateX: 1710, gateY: 485, gateH: 145, platformX: 1810, platformY: 515, petalX: 1845, petalY: 457 },
+      { id: 'sun-echo', gateX: 1735, gateY: 590, gateH: 135, platformX: 1830, platformY: 610, petalX: 1845, petalY: 552 },
       { id: 'moss-whisper', gateX: 3440, gateY: 330, gateH: 150, platformX: 3535, platformY: 340, petalX: 3560, petalY: 285 },
       { id: 'moon-memory', gateX: 4925, gateY: 535, gateH: 155, platformX: 5030, platformY: 525, petalX: 5070, petalY: 468 },
     ];
@@ -1224,10 +1317,11 @@ class LumenwildScene extends Phaser.Scene {
 
     // New standard enemy archetypes.
     const spawnGlowwing = (x: number, y: number, left: number, right: number) => {
-      const e = this.enemies.create(x, y, 'glowwing') as Phaser.Physics.Arcade.Sprite;
+      const e = this.enemies.create(x, y, 'kenney-bee-idle') as Phaser.Physics.Arcade.Sprite;
+      e.setScale(0.42).play('bee-fly');
       const body = e.body as Phaser.Physics.Arcade.Body;
       body.setAllowGravity(false);
-      e.setDepth(7).setSize(42, 29).setOffset(7, 6).setDataEnabled();
+      e.setDepth(7).setSize(94, 62).setOffset(17, 33).setDataEnabled();
       e.setData('hp', 2).setData('kind', 'glowwing').setData('homeY', y).setData('left', left).setData('right', right).setData('dir', 1);
       this.tweens.add({ targets: e, scaleY: 0.88, yoyo: true, repeat: -1, duration: 340, ease: 'Sine.inOut' });
     };
@@ -1371,15 +1465,16 @@ class LumenwildScene extends Phaser.Scene {
     this.cameraShake(100, 0.002);
 
     const spawnSlime = (sx: number, sy: number) => {
-      const e = this.enemies.create(sx, sy, 'slime-sheet', 'bounce0') as Phaser.Physics.Arcade.Sprite;
-      e.play('slime-bounce');
-      e.setDepth(7).setSize(39, 27).setOffset(10, 17).setBounce(0.1).setDataEnabled();
+      const e = this.enemies.create(sx, sy, 'kenney-slime-idle') as Phaser.Physics.Arcade.Sprite;
+      e.setScale(0.44).play('slime-bounce');
+      e.setDepth(7).setSize(86, 58).setOffset(21, 55).setBounce(0.1).setDataEnabled();
       e.setData('hp', 2).setData('kind', 'slime').setData('left', sx - 95).setData('right', sx + 95).setData('dir', 1).setData('trialId', id);
     };
     const spawnWing = (sx: number, sy: number) => {
-      const e = this.enemies.create(sx, sy, 'glowwing') as Phaser.Physics.Arcade.Sprite;
+      const e = this.enemies.create(sx, sy, 'kenney-bee-idle') as Phaser.Physics.Arcade.Sprite;
+      e.setScale(0.42).play('bee-fly');
       (e.body as Phaser.Physics.Arcade.Body).setAllowGravity(false);
-      e.setDepth(7).setSize(42, 29).setOffset(7, 6).setDataEnabled();
+      e.setDepth(7).setSize(94, 62).setOffset(17, 33).setDataEnabled();
       e.setData('hp', 2).setData('kind', 'glowwing').setData('homeY', sy).setData('left', sx - 130).setData('right', sx + 130).setData('dir', -1).setData('trialId', id);
     };
     const spawnPod = (sx: number, sy: number) => {
@@ -1659,7 +1754,7 @@ class LumenwildScene extends Phaser.Scene {
 
     if (this.dashing && time - this.lastTrailAt > 34) {
       this.lastTrailAt = time;
-      const ghost = this.add.image(this.player.x - this.facing * 12, this.player.y, 'player-sheet', this.player.frame.name)
+      const ghost = this.add.image(this.player.x - this.facing * 12, this.player.y, this.player.texture.key)
         .setFlipX(this.player.flipX)
         .setTint(0x8ff5ff)
         .setAlpha(0.30)
@@ -2026,6 +2121,8 @@ class LumenwildScene extends Phaser.Scene {
       if (!wall.active) return;
       if (Phaser.Math.Distance.Between(this.player.x, this.player.y, wall.x, wall.y) < 105) {
         this.burst(wall.x, wall.y, palette.violet, 22, 300);
+        const visuals = wall.getData('visuals') as Phaser.GameObjects.GameObject[] | undefined;
+        visuals?.forEach(item => item.destroy());
         wall.disableBody(true, true);
         this.cameraShake(220, 0.009);
         const secretId = wall.getData('secretId') as string | undefined;
