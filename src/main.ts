@@ -899,83 +899,73 @@ class LumenwildScene extends Phaser.Scene {
       this.tweens.add({ targets: cloud, x: cloud.x + 80 + (i % 3) * 30, yoyo: true, repeat: -1, duration: 11000 + i * 640, ease: 'Sine.inOut' });
     }
 
-    // Three parallax ridge layers.
-    for (let layer = 0; layer < 3; layer++) {
-      const factor = 0.06 + layer * 0.075;
-      const color = [0x122943, 0x174355, 0x20595b][layer];
-      for (let i = 0; i < 27; i++) {
-        const x = i * 235 + (layer * 97) % 180;
-        const h = 120 + ((i * 71 + layer * 43) % 190);
-        this.add.ellipse(x, 835 - layer * 34, 390, h * 2, color, 0.86)
-          .setOrigin(0.5, 1)
-          .setScrollFactor(factor)
-          .setDepth(-48 + layer);
-      }
+    // Authored CC0 platformer backgrounds replace the old ellipse-heavy hill silhouettes.
+    const biomeBackgrounds = [
+      { x: 900, key: 'kenney-bg-grass', tint: 0x6bc6a9, alpha: 0.36 },
+      { x: 2720, key: 'kenney-bg-shroom', tint: 0x62b8ad, alpha: 0.40 },
+      { x: 4540, key: 'kenney-bg-grass', tint: 0x9b87d1, alpha: 0.34 },
+    ] as const;
+    biomeBackgrounds.forEach((bg, i) => {
+      this.add.image(bg.x, 585, bg.key)
+        .setDisplaySize(1940, 1080)
+        .setFlipX(i === 2)
+        .setAlpha(bg.alpha)
+        .setTint(bg.tint)
+        .setScrollFactor(0.075)
+        .setDepth(-34);
+
+      this.add.image(bg.x + (i % 2 ? 120 : -120), 650, bg.key)
+        .setDisplaySize(1820, 990)
+        .setFlipX(i !== 1)
+        .setAlpha(bg.alpha * 0.16)
+        .setTint(i === 0 ? 0xb7e9c9 : i === 1 ? 0x89d8c7 : 0xc3b1ef)
+        .setScrollFactor(0.035)
+        .setDepth(-40);
+    });
+
+    // Low-contrast authored props create depth without reading as simple circles/rectangles.
+    const distantProp = (
+      x: number,
+      y: number,
+      key: string,
+      scale: number,
+      alpha: number,
+      tint: number,
+      depth: number,
+      scroll: number,
+      flip = false,
+    ) => {
+      const image = this.add.image(x, y, key)
+        .setOrigin(0.5, 1)
+        .setScale(scale)
+        .setAlpha(alpha)
+        .setTint(tint)
+        .setFlipX(flip)
+        .setDepth(depth)
+        .setScrollFactor(scroll);
+      return image;
+    };
+
+    for (let x = 140; x < 1850; x += 245) {
+      distantProp(x, 910, 'kenney-bush', 1.25 + (x % 3) * 0.12, 0.22, 0x4f9d79, -17, 0.16, x % 2 === 0);
+      if (x % 490 < 260) distantProp(x + 85, 914, 'kenney-rock', 0.72, 0.14, 0x477c75, -16, 0.17, true);
     }
 
-    // Authored CC0 platformer backgrounds sit underneath the original color language.
-    this.add.image(900, 575, 'kenney-bg-grass')
-      .setDisplaySize(1840, 1020)
-      .setAlpha(0.18)
-      .setTint(0x78d3b2)
-      .setScrollFactor(0.07)
-      .setDepth(-29);
-    this.add.image(2720, 575, 'kenney-bg-shroom')
-      .setDisplaySize(1840, 1020)
-      .setAlpha(0.20)
-      .setTint(0x69c6b8)
-      .setScrollFactor(0.07)
-      .setDepth(-29);
-    this.add.image(4540, 575, 'kenney-bg-grass')
-      .setDisplaySize(1840, 1020)
-      .setFlipX(true)
-      .setAlpha(0.17)
-      .setTint(0xa28bdf)
-      .setScrollFactor(0.07)
-      .setDepth(-29);
-
-    // Biome haze — subtle color shifts behind the play space.
-    this.add.rectangle(900, 540, 1800, 1080, 0xffd56b, 0.025).setDepth(-28);
-    this.add.rectangle(2730, 540, 1760, 1080, 0x49c6ac, 0.03).setDepth(-28);
-    this.add.rectangle(4500, 540, 1800, 1080, 0x9b7bff, 0.04).setDepth(-28);
-
-    // Sunmeadow distant flowers and soft tree crowns.
-    for (let x = 110; x < 1850; x += 180) {
-      const trunkH = 130 + (x % 95);
-      this.add.rectangle(x, 910, 15, trunkH, 0x214e50, 0.65).setOrigin(0.5, 1).setDepth(-12);
-      this.add.circle(x - 22, 910 - trunkH + 22, 34, 0x2f6a61, 0.58).setDepth(-13);
-      this.add.circle(x + 23, 910 - trunkH + 8, 42, 0x397b67, 0.54).setDepth(-13);
-      this.add.circle(x, 910 - trunkH - 14, 30, 0x4a8b68, 0.48).setDepth(-13);
-      const bloom = this.add.circle(x + 14, 910 - trunkH - 26, 7, x % 360 === 0 ? palette.pink : palette.sun, 0.7).setDepth(-11);
-      this.tweens.add({ targets: bloom, scale: 1.35, alpha: 0.42, yoyo: true, repeat: -1, duration: 1700 + (x % 500) });
+    for (let x = 1980; x < 3600; x += 230) {
+      const key = x % 460 < 240 ? 'kenney-mushroom-red' : 'kenney-mushroom-brown';
+      distantProp(x, 910, key, 1.05 + (x % 4) * 0.11, 0.24, 0x77bca9, -16, 0.15, x % 2 === 0);
+      distantProp(x + 90, 920, 'kenney-rock', 0.78, 0.13, 0x527f7d, -17, 0.14, true);
     }
 
-    // Moss Grotto: stalactites, giant mushrooms, hanging vines.
-    for (let x = 1910; x < 3600; x += 150) {
-      const h = 90 + (x % 140);
-      this.add.triangle(x, 34, 0, 0, 54, 0, 27, h, 0x122f42, 0.72).setOrigin(0.5, 0).setDepth(-10);
-      if (x % 300 < 170) {
-        const mush = this.add.image(x + 55, 830 - (x % 120), 'mushroom').setScale(1.45 + (x % 3) * 0.22).setAlpha(0.48).setDepth(-9);
-        this.tweens.add({ targets: mush, angle: { from: -2, to: 2 }, yoyo: true, repeat: -1, duration: 2500 + (x % 700), ease: 'Sine.inOut' });
-      }
-      const vine = this.add.graphics().setDepth(-8);
-      vine.lineStyle(5, 0x286052, 0.45);
-      vine.beginPath();
-      vine.moveTo(x - 38, 0);
-      vine.lineTo(x - 36, 74 + (x % 130));
-      vine.lineTo(x - 46, 128 + (x % 85));
-      vine.strokePath();
+    for (let x = 3720; x < WORLD_W; x += 250) {
+      distantProp(x, 920, 'kenney-plant-purple', 1.15 + (x % 3) * 0.1, 0.22, 0x8068ad, -16, 0.15, x % 2 === 0);
+      distantProp(x + 105, 925, 'kenney-rock', 0.84, 0.14, 0x725f9a, -17, 0.14, true);
     }
 
-    // Twilight Canopy: huge trunks and luminous crowns.
-    for (let x = 3660; x < WORLD_W; x += 235) {
-      const trunkW = 52 + (x % 28);
-      this.add.rectangle(x, 970, trunkW, 560, 0x1f254d, 0.78).setOrigin(0.5, 1).setDepth(-14);
-      this.add.ellipse(x, 395 + (x % 80), 250, 145, 0x363163, 0.54).setDepth(-15);
-      this.add.circle(x - 70, 410 + (x % 60), 65, 0x47396e, 0.5).setDepth(-15);
-      this.add.circle(x + 75, 385 + (x % 75), 76, 0x514075, 0.46).setDepth(-15);
-      this.add.circle(x + 20, 380, 7, palette.pink, 0.45).setDepth(-13);
-    }
+    // Biome haze keeps the established palette while letting the authored art do the silhouette work.
+    this.add.rectangle(900, 540, 1800, 1080, 0xffd56b, 0.018).setDepth(-28);
+    this.add.rectangle(2730, 540, 1760, 1080, 0x49c6ac, 0.022).setDepth(-28);
+    this.add.rectangle(4500, 540, 1800, 1080, 0x9b7bff, 0.03).setDepth(-28);
 
     // Floating atmospheric motes.
     for (let i = 0; i < 130; i++) {
@@ -1050,7 +1040,7 @@ class LumenwildScene extends Phaser.Scene {
     this.tweens.add({ targets: bloom, scale: 1.12, alpha: 0.2, yoyo: true, repeat: -1, duration: 2600 });
 
     // Grotto landmark: luminous mushroom tower.
-    const giantMush = this.add.image(2550, 700, 'mushroom').setScale(3.8).setAlpha(0.26).setDepth(-5);
+    const giantMush = this.add.image(2550, 715, 'kenney-mushroom-red').setScale(2.2).setTint(0xa694e8).setAlpha(0.30).setDepth(-5);
     this.add.circle(2550, 615, 94, palette.violet, 0.035).setDepth(-6);
     this.tweens.add({ targets: giantMush, angle: { from: -1.3, to: 1.3 }, yoyo: true, repeat: -1, duration: 4800, ease: 'Sine.inOut' });
 
