@@ -137,6 +137,9 @@ class LumenwildScene extends Phaser.Scene {
   private lastTrailAt = 0;
   private lastDustAt = 0;
   private vignette!: Phaser.GameObjects.Graphics;
+  private biomeWash!: Phaser.GameObjects.Rectangle;
+  private bossBarGroup!: Phaser.GameObjects.Container;
+  private bossBarFill!: Phaser.GameObjects.Rectangle;
 
   constructor() { super('lumenwild'); }
 
@@ -616,20 +619,26 @@ class LumenwildScene extends Phaser.Scene {
       [4130, 525], [4390, 675], [5030, 730],
     ];
     shards.forEach(([x, y], i) => {
+      const glow = this.add.circle(x, y, 18, palette.sun, 0.07).setDepth(5).setBlendMode(Phaser.BlendModes.ADD);
       const s = this.pickups.create(x, y, 'shard') as Phaser.Physics.Arcade.Sprite;
-      s.setData('type', 'shard').setData('index', i).setDepth(6);
+      s.setData('type', 'shard').setData('index', i).setData('glow', glow).setDepth(6);
       this.tweens.add({ targets: s, y: y - 12, angle: 8, yoyo: true, repeat: -1, duration: 1000 + (i % 4) * 130, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: glow, scale: 1.55, alpha: 0.015, yoyo: true, repeat: -1, duration: 1200 + (i % 4) * 150, ease: 'Sine.inOut' });
     });
 
     if (!this.abilities.dash) {
+      const dashGlow = this.add.circle(1590, 505, 48, palette.sky, 0.065).setDepth(5).setBlendMode(Phaser.BlendModes.ADD);
       const dash = this.pickups.create(1590, 505, 'dash-orb') as Phaser.Physics.Arcade.Sprite;
-      dash.setData('type', 'dash').setDepth(6);
+      dash.setData('type', 'dash').setData('glow', dashGlow).setDepth(6);
       this.tweens.add({ targets: dash, scale: 1.12, angle: 12, yoyo: true, repeat: -1, duration: 1200, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: dashGlow, scale: 1.35, alpha: 0.02, yoyo: true, repeat: -1, duration: 1500, ease: 'Sine.inOut' });
     }
     if (!this.abilities.doubleJump) {
+      const jumpGlow = this.add.circle(3410, 395, 48, palette.pink, 0.06).setDepth(5).setBlendMode(Phaser.BlendModes.ADD);
       const jump = this.pickups.create(3410, 395, 'jump-orb') as Phaser.Physics.Arcade.Sprite;
-      jump.setData('type', 'doubleJump').setDepth(6);
+      jump.setData('type', 'doubleJump').setData('glow', jumpGlow).setDepth(6);
       this.tweens.add({ targets: jump, scale: 1.12, angle: -12, yoyo: true, repeat: -1, duration: 1250, ease: 'Sine.inOut' });
+      this.tweens.add({ targets: jumpGlow, scale: 1.35, alpha: 0.018, yoyo: true, repeat: -1, duration: 1550, ease: 'Sine.inOut' });
     }
   }
 
@@ -841,6 +850,10 @@ class LumenwildScene extends Phaser.Scene {
   }
 
   private createScreenFx(): void {
+    this.biomeWash = this.add.rectangle(640, 360, 1280, 720, palette.sun, 0.018)
+      .setScrollFactor(0)
+      .setDepth(47)
+      .setBlendMode(Phaser.BlendModes.ADD);
     this.vignette = this.add.graphics().setScrollFactor(0).setDepth(80);
     this.vignette.fillStyle(0x020611, 0.13).fillRect(0, 0, 1280, 18);
     this.vignette.fillStyle(0x020611, 0.13).fillRect(0, 702, 1280, 18);
@@ -871,11 +884,15 @@ class LumenwildScene extends Phaser.Scene {
   }
 
   private updateEnemies(time: number): void {
+    let bossPresented = false;
     this.enemies.getChildren().forEach(child => {
       const enemy = child as Phaser.Physics.Arcade.Sprite;
       if (!enemy.active) return;
       const phase = Math.sin(time * 0.006 + enemy.x * 0.01);
       if (enemy.getData('kind') === 'boss') {
+        const bossHp = enemy.getData('hp') as number;
+        bossPresented = this.player.x > 4250 && bossHp > 0;
+        this.bossBarFill.setScale(Phaser.Math.Clamp(bossHp / 9, 0, 1), 1);
         enemy.setScale(1 + phase * 0.025, 1 - phase * 0.018);
         enemy.setAngle(phase * 1.3);
         const dist = this.player.x - enemy.x;
@@ -900,6 +917,7 @@ class LumenwildScene extends Phaser.Scene {
       if (enemy.x > right) dir = -1;
       enemy.setData('dir', dir).setVelocityX(dir * 68).setFlipX(dir < 0);
     });
+    this.bossBarGroup.setAlpha(bossPresented ? 1 : 0);
   }
 
   private damageEnemy(enemy: Phaser.Physics.Arcade.Sprite, amount: number): void {
@@ -956,6 +974,11 @@ class LumenwildScene extends Phaser.Scene {
   private collectPickup(pickup: Phaser.Physics.Arcade.Sprite): void {
     if (!pickup.active) return;
     const type = pickup.getData('type') as string;
+    const glow = pickup.getData('glow') as Phaser.GameObjects.Arc | undefined;
+    if (glow) {
+      this.tweens.killTweensOf(glow);
+      glow.destroy();
+    }
     pickup.disableBody(true, true);
     this.soundscape.collect();
     this.burst(pickup.x, pickup.y, type === 'dash' ? palette.sky : type === 'doubleJump' ? palette.pink : palette.sun, 14, 210);
@@ -1100,6 +1123,24 @@ class LumenwildScene extends Phaser.Scene {
       strokeThickness: 2,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(70).setAlpha(0);
 
+    const bossPlate = this.add.rectangle(640, 681, 552, 46, 0x070d20, 0.82)
+      .setStrokeStyle(2, palette.pink, 0.24)
+      .setScrollFactor(0);
+    const bossLabel = this.add.text(640, 665, 'GLOOMKEEPER  •  KEEPER OF THE CANOPY', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '11px',
+      fontStyle: '900',
+      color: '#f4ddff',
+      letterSpacing: 1.8,
+    }).setOrigin(0.5).setScrollFactor(0);
+    const bossTrack = this.add.rectangle(382, 688, 516, 9, 0x211a48, 0.9).setOrigin(0, 0.5).setScrollFactor(0);
+    this.bossBarFill = this.add.rectangle(382, 688, 516, 9, palette.pink, 0.9).setOrigin(0, 0.5).setScrollFactor(0);
+    const bossShine = this.add.rectangle(382, 686, 516, 2, 0xffd4e9, 0.55).setOrigin(0, 0.5).setScrollFactor(0);
+    this.bossBarGroup = this.add.container(0, 0, [bossPlate, bossLabel, bossTrack, this.bossBarFill, bossShine])
+      .setScrollFactor(0)
+      .setDepth(68)
+      .setAlpha(0);
+
     leftPanel.setScrollFactor(0);
     this.updateHud();
   }
@@ -1117,6 +1158,9 @@ class LumenwildScene extends Phaser.Scene {
     const next = x < 1900 ? 'SUNMEADOW' : x < 3650 ? 'MOSS GROTTO' : 'TWILIGHT CANOPY';
     if (next === this.biome) return;
     this.biome = next;
+    const wash = next === 'SUNMEADOW' ? palette.sun : next === 'MOSS GROTTO' ? palette.mint : palette.violet;
+    this.biomeWash.setFillStyle(wash, 1).setAlpha(0);
+    this.tweens.add({ targets: this.biomeWash, alpha: next === 'TWILIGHT CANOPY' ? 0.035 : 0.022, duration: 900, ease: 'Sine.out' });
     this.areaText.setText(next).setAlpha(0);
     this.tweens.add({ targets: this.areaText, alpha: 1, duration: 600 });
   }
