@@ -141,6 +141,7 @@ class LumenwildScene extends Phaser.Scene {
   private biomeWash!: Phaser.GameObjects.Rectangle;
   private bossBarGroup!: Phaser.GameObjects.Container;
   private bossBarFill!: Phaser.GameObjects.Rectangle;
+  private bossIntroPlayed = false;
 
   constructor() { super('lumenwild'); }
 
@@ -1292,6 +1293,11 @@ class LumenwildScene extends Phaser.Scene {
         const bossHp = enemy.getData('hp') as number;
         let phase = enemy.getData('phase') as number;
         bossPresented = this.player.x > 4250 && bossHp > 0;
+        if (bossPresented && !this.bossIntroPlayed) {
+          this.bossIntroPlayed = true;
+          enemy.setData('nextLeap', time + 1450);
+          this.showBossIntro();
+        }
         this.bossBarFill.setScale(Phaser.Math.Clamp(bossHp / 9, 0, 1), 1);
 
         if (bossHp <= 4 && phase === 1) {
@@ -1599,6 +1605,114 @@ class LumenwildScene extends Phaser.Scene {
     this.tweens.add({ targets: this.biomeWash, alpha: next === 'TWILIGHT CANOPY' ? 0.035 : 0.022, duration: 900, ease: 'Sine.out' });
     this.areaText.setText(next).setAlpha(0);
     this.tweens.add({ targets: this.areaText, alpha: 1, duration: 600 });
+    this.showAreaCard(next);
+  }
+
+  private showAreaCard(name: string): void {
+    const subtitle = name === 'SUNMEADOW'
+      ? 'where every small step catches light'
+      : name === 'MOSS GROTTO'
+        ? 'old roots, soft echoes, hidden bloom'
+        : 'moonlit branches above the sleeping wild';
+
+    const line = this.add.rectangle(640, 198, 230, 2, palette.mint, 0.34)
+      .setScrollFactor(0)
+      .setDepth(64)
+      .setScale(0.2, 1)
+      .setAlpha(0);
+    const title = this.add.text(640, 222, name, {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '30px',
+      fontStyle: '900',
+      color: '#f5fff9',
+      stroke: '#061224',
+      strokeThickness: 6,
+      letterSpacing: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(65).setAlpha(0);
+    const sub = this.add.text(640, 260, subtitle.toUpperCase(), {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '10px',
+      fontStyle: '800',
+      color: name === 'SUNMEADOW' ? '#ffe8a0' : name === 'MOSS GROTTO' ? '#aef5d9' : '#d9c9ff',
+      letterSpacing: 2.5,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(65).setAlpha(0);
+
+    this.tweens.add({
+      targets: line,
+      alpha: { from: 0, to: 1 },
+      scaleX: 1,
+      duration: 420,
+      ease: 'Cubic.out',
+      hold: 1150,
+      yoyo: true,
+      onComplete: () => line.destroy(),
+    });
+    this.tweens.add({
+      targets: [title, sub],
+      alpha: { from: 0, to: 1 },
+      y: '-=8',
+      duration: 420,
+      ease: 'Cubic.out',
+      hold: 1050,
+      yoyo: true,
+      onComplete: () => { title.destroy(); sub.destroy(); },
+    });
+  }
+
+  private showBossIntro(): void {
+    const wash = this.add.rectangle(640, 360, 1280, 720, 0x2a164d, 0)
+      .setScrollFactor(0)
+      .setDepth(62);
+    const eyebrow = this.add.text(640, 245, 'THE CANOPY STIRS', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '11px',
+      fontStyle: '900',
+      color: '#ffb7da',
+      letterSpacing: 4,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(66).setAlpha(0);
+    const name = this.add.text(640, 293, 'GLOOMKEEPER', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '45px',
+      fontStyle: '900',
+      color: '#fff1b8',
+      stroke: '#1b1037',
+      strokeThickness: 8,
+      letterSpacing: 3,
+      shadow: { offsetX: 0, offsetY: 8, color: '#000000', blur: 14, fill: true },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(66).setAlpha(0);
+    const role = this.add.text(640, 342, 'KEEPER OF THE TWILIGHT RHYTHM', {
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: '12px',
+      fontStyle: '800',
+      color: '#d9c9ff',
+      letterSpacing: 2.8,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(66).setAlpha(0);
+
+    this.cameras.main.zoomTo(1.055, 420, 'Sine.easeOut');
+    this.tweens.add({
+      targets: wash,
+      alpha: 0.12,
+      duration: 300,
+      yoyo: true,
+      hold: 650,
+      onComplete: () => wash.destroy(),
+    });
+    this.tweens.add({
+      targets: [eyebrow, name, role],
+      alpha: { from: 0, to: 1 },
+      y: '-=10',
+      duration: 360,
+      ease: 'Cubic.out',
+      hold: 700,
+      yoyo: true,
+      onComplete: () => {
+        eyebrow.destroy();
+        name.destroy();
+        role.destroy();
+        this.cameras.main.zoomTo(1, 520, 'Sine.easeInOut');
+      },
+    });
+    this.cameras.main.shake(180, 0.002);
   }
 
   private updateObjective(): void {
