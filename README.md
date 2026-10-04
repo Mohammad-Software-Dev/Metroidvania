@@ -43,6 +43,10 @@ The production bundle is written to `dist/` and can be deployed to any static ho
 - local save state for abilities, shards, and boss progress
 - keyboard + gamepad support
 - parallax scenery, animated motes, procedural VFX, and synthesized WebAudio feedback
+- runtime-authored sprite sheets with frame-based idle, run, jump, fall, attack, dash, hurt, slime, and boss animations
+- biome-specific repeating terrain tiles so long platforms keep crisp surface detail instead of stretched textures
+- foreground foliage/crystal occlusion layers for stronger scene depth
+- two-phase Gloomkeeper presentation with attack telegraphs, landing impact VFX, and animated boss states
 - responsive 16:9 canvas that scales to the browser window
 
 ## Tech
