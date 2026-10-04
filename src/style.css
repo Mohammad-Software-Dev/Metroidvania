@@ -1,15 +1,72 @@
 :root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   color: #f7fbff;
-  background: #050b18;
+  background: #030713;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
 
 * { box-sizing: border-box; }
-html, body, #app { margin: 0; min-width: 100%; min-height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 15%, #12315c 0%, #071226 42%, #030713 100%); }
-body { min-height: 100vh; }
-#app { display: grid; place-items: center; min-height: 100vh; }
-#game-shell { width: 100vw; height: 100vh; position: relative; overflow: hidden; box-shadow: inset 0 0 90px #0008; }
-#game { width: 100%; height: 100%; }
-canvas { display: block; width: 100% !important; height: 100% !important; image-rendering: auto; }
+html, body, #app {
+  margin: 0;
+  min-width: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 76% 12%, rgba(255, 214, 107, 0.10), transparent 25%),
+    radial-gradient(circle at 24% 22%, rgba(114, 230, 177, 0.09), transparent 30%),
+    radial-gradient(circle at 50% 110%, rgba(155, 123, 255, 0.12), transparent 42%),
+    linear-gradient(180deg, #071226 0%, #040916 58%, #02050d 100%);
+}
+
+body {
+  min-height: 100vh;
+  user-select: none;
+  overscroll-behavior: none;
+}
+
+#app {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+#game-shell {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: #050b18;
+  box-shadow:
+    inset 0 0 100px rgba(0, 0, 0, 0.5),
+    0 0 80px rgba(67, 212, 191, 0.05);
+}
+
+#game-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  background:
+    radial-gradient(ellipse at center, transparent 56%, rgba(1, 5, 15, 0.18) 100%),
+    linear-gradient(180deg, rgba(255,255,255,0.015), transparent 24%, transparent 78%, rgba(0,0,0,0.08));
+}
+
+#game {
+  width: 100%;
+  height: 100%;
+}
+
+canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  image-rendering: auto;
+  filter: saturate(1.07) contrast(1.025);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  canvas { filter: saturate(1.04); }
+}
