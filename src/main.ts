@@ -136,6 +136,7 @@ class LumenwildScene extends Phaser.Scene {
   private playerShadow!: Phaser.GameObjects.Ellipse;
   private lastTrailAt = 0;
   private lastDustAt = 0;
+  private wasGrounded = false;
   private vignette!: Phaser.GameObjects.Graphics;
   private biomeWash!: Phaser.GameObjects.Rectangle;
   private bossBarGroup!: Phaser.GameObjects.Container;
@@ -146,12 +147,15 @@ class LumenwildScene extends Phaser.Scene {
   create(): void {
     this.loadSave();
     this.createTextures();
+    this.createSpriteSheets();
+    this.createAnimations();
     this.physics.world.setBounds(0, 0, WORLD_W, WORLD_H);
     this.cameras.main.setBounds(0, 0, WORLD_W, WORLD_H);
     this.cameras.main.setBackgroundColor('#081326');
 
     this.createBackdrop();
     this.createWorld();
+    this.createForegroundDetails();
     this.createPlayer();
     this.createEnemies();
     this.createPickups();
@@ -336,6 +340,337 @@ class LumenwildScene extends Phaser.Scene {
     });
   }
 
+  private createSpriteSheets(): void {
+    const rounded = (ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, r);
+      ctx.closePath();
+    };
+
+    if (!this.textures.exists('player-sheet')) {
+      const fw = 72;
+      const fh = 80;
+      const frames = [
+        { name: 'idle0', pose: 'idle', t: 0 },
+        { name: 'idle1', pose: 'idle', t: 1 },
+        { name: 'idle2', pose: 'idle', t: 2 },
+        { name: 'idle3', pose: 'idle', t: 3 },
+        { name: 'run0', pose: 'run', t: 0 },
+        { name: 'run1', pose: 'run', t: 1 },
+        { name: 'run2', pose: 'run', t: 2 },
+        { name: 'run3', pose: 'run', t: 3 },
+        { name: 'jump', pose: 'jump', t: 0 },
+        { name: 'fall', pose: 'fall', t: 0 },
+        { name: 'attack0', pose: 'attack', t: 0 },
+        { name: 'attack1', pose: 'attack', t: 1 },
+        { name: 'attack2', pose: 'attack', t: 2 },
+        { name: 'dash', pose: 'dash', t: 0 },
+        { name: 'hurt', pose: 'hurt', t: 0 },
+      ] as const;
+      const tex = this.textures.createCanvas('player-sheet', fw * frames.length, fh);
+      if (tex) {
+        const ctx = tex.getContext();
+        frames.forEach((frame, index) => {
+          const ox = index * fw;
+          const bob = frame.pose === 'idle' ? [0, -1.5, -2.5, -1][frame.t] : 0;
+          const run = frame.pose === 'run';
+          const attack = frame.pose === 'attack';
+          const dash = frame.pose === 'dash';
+          const hurt = frame.pose === 'hurt';
+          const airborne = frame.pose === 'jump' || frame.pose === 'fall';
+          const lean = dash ? 7 : attack ? 3 + frame.t * 2 : run ? 2 : hurt ? -3 : 0;
+          const leg = run ? [-5, 4, 6, -4][frame.t] : frame.pose === 'jump' ? -4 : frame.pose === 'fall' ? 4 : 0;
+          const squashY = dash ? 0.88 : hurt ? 0.93 : 1;
+          const squashX = dash ? 1.10 : hurt ? 1.05 : 1;
+          ctx.save();
+          ctx.translate(ox + fw / 2, 40 + bob);
+          ctx.rotate((lean * Math.PI) / 180);
+          ctx.scale(squashX, squashY);
+
+          // Cape, with pose-dependent sweep.
+          ctx.fillStyle = 'rgba(8,22,45,0.96)';
+          ctx.beginPath();
+          ctx.moveTo(-18, 8);
+          ctx.quadraticCurveTo(-20 - (dash ? 13 : run ? 5 : 0), 25, -17 - (dash ? 16 : 2), 31);
+          ctx.lineTo(17, 31);
+          ctx.quadraticCurveTo(15, 13, 12, 7);
+          ctx.closePath();
+          ctx.fill();
+
+          // Torso.
+          ctx.fillStyle = hurt ? '#274b68' : '#15385b';
+          rounded(ctx, -17, 2, 34, 37, 13);
+          ctx.fill();
+          ctx.fillStyle = '#285b75';
+          rounded(ctx, -13, 8, 26, 23, 9);
+          ctx.fill();
+
+          // Boots.
+          ctx.fillStyle = '#ff9f7c';
+          const leftLegY = 31 + leg;
+          const rightLegY = 31 - leg;
+          rounded(ctx, -15, leftLegY, 11, 11, 4); ctx.fill();
+          rounded(ctx, 4, rightLegY, 11, 11, 4); ctx.fill();
+          ctx.fillStyle = '#ffd6bd';
+          rounded(ctx, -13, leftLegY + 3, 8, 4, 2); ctx.fill();
+          rounded(ctx, 5, rightLegY + 3, 8, 4, 2); ctx.fill();
+
+          // Head halo and head.
+          ctx.fillStyle = hurt ? 'rgba(255,126,182,0.20)' : 'rgba(159,246,202,0.20)';
+          ctx.beginPath(); ctx.arc(0, -15, 21, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = hurt ? '#8ed5b3' : '#72e6b1';
+          ctx.beginPath(); ctx.arc(0, -15, 16.5, 0, Math.PI * 2); ctx.fill();
+
+          // Face.
+          const blink = frame.pose === 'idle' && frame.t === 2;
+          ctx.strokeStyle = '#173653';
+          ctx.fillStyle = '#e8fff1';
+          if (blink) {
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(-9, -16); ctx.lineTo(-4, -16); ctx.moveTo(4, -16); ctx.lineTo(9, -16); ctx.stroke();
+          } else {
+            ctx.beginPath(); ctx.arc(-7, -16, 4.5, 0, Math.PI * 2); ctx.arc(7, -16, 4.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#173653';
+            ctx.beginPath(); ctx.arc(-6.5, -15.5, 2, 0, Math.PI * 2); ctx.arc(7.5, -15.5, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.75)';
+            ctx.beginPath(); ctx.arc(-7.5, -17, 1, 0, Math.PI * 2); ctx.arc(6.5, -17, 1, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.strokeStyle = '#4e9777';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (hurt) {
+            ctx.moveTo(-5, -7); ctx.quadraticCurveTo(0, -11, 5, -7);
+          } else {
+            ctx.moveTo(-5, -9); ctx.quadraticCurveTo(0, -5, 5, -9);
+          }
+          ctx.stroke();
+
+          // Sprout and leaf.
+          ctx.fillStyle = '#ffd66b';
+          ctx.beginPath(); ctx.moveTo(-4, -29); ctx.lineTo(0, -38); ctx.lineTo(5, -28); ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#b9f27c';
+          ctx.beginPath(); ctx.ellipse(8, -34, 7, 3.5, -0.25, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#5ba85e'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.moveTo(1, -29); ctx.lineTo(11, -35); ctx.stroke();
+
+          // Scarf and arm language.
+          ctx.fillStyle = '#ffd66b';
+          ctx.beginPath();
+          ctx.moveTo(13, -2);
+          ctx.lineTo(attack ? 31 : dash ? 34 : 24, attack ? -8 + frame.t * 4 : dash ? 6 : 5);
+          ctx.lineTo(13, 9);
+          ctx.closePath();
+          ctx.fill();
+
+          if (attack) {
+            ctx.strokeStyle = 'rgba(255,240,163,0.95)';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            const swing = [-0.85, -0.15, 0.65][frame.t];
+            ctx.beginPath();
+            ctx.arc(11, 4, 26, swing - 0.35, swing + 0.35);
+            ctx.stroke();
+          }
+
+          if (airborne) {
+            ctx.fillStyle = frame.pose === 'jump' ? 'rgba(255,126,182,0.26)' : 'rgba(85,200,210,0.20)';
+            ctx.beginPath(); ctx.ellipse(-20, 14, 8, 4, -0.8, 0, Math.PI * 2); ctx.ellipse(20, 14, 8, 4, 0.8, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.restore();
+          tex.add(frame.name, 0, ox, 0, fw, fh);
+        });
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('slime-sheet')) {
+      const fw = 60;
+      const fh = 48;
+      const tex = this.textures.createCanvas('slime-sheet', fw * 4, fh);
+      if (tex) {
+        const ctx = tex.getContext();
+        for (let i = 0; i < 4; i++) {
+          const ox = i * fw;
+          const sy = [1, 0.90, 1.05, 0.94][i];
+          const sx = [1, 1.08, 0.96, 1.05][i];
+          ctx.save();
+          ctx.translate(ox + 30, 25);
+          ctx.scale(sx, sy);
+          ctx.fillStyle = 'rgba(3,16,29,0.34)';
+          ctx.beginPath(); ctx.ellipse(0, 17, 24, 5, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#17475b';
+          rounded(ctx, -23, -6, 46, 28, 13); ctx.fill();
+          ctx.fillStyle = '#55c8d2';
+          ctx.beginPath(); ctx.arc(0, -5, 17, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(217,255,255,0.45)';
+          ctx.beginPath(); ctx.ellipse(-7, -13, 8, 4, -0.3, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#f7fbff';
+          ctx.beginPath(); ctx.arc(-7, -6, 4.2, 0, Math.PI * 2); ctx.arc(7, -6, 4.2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#081326';
+          ctx.beginPath(); ctx.arc(-6, -5, 2, 0, Math.PI * 2); ctx.arc(8, -5, 2, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#ff7eb6';
+          ctx.beginPath(); ctx.arc(-15, 4, 3, 0, Math.PI * 2); ctx.arc(15, 4, 3, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = '#245d6e';
+          ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(0, 1, 8, 0.2, Math.PI - 0.2); ctx.stroke();
+          ctx.restore();
+          tex.add(`bounce${i}`, 0, ox, 0, fw, fh);
+        }
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('boss-sheet')) {
+      const fw = 144;
+      const fh = 122;
+      const names = ['idle0', 'idle1', 'charge0', 'charge1', 'leap', 'rage', 'hurt'] as const;
+      const tex = this.textures.createCanvas('boss-sheet', fw * names.length, fh);
+      if (tex) {
+        const ctx = tex.getContext();
+        names.forEach((name, i) => {
+          const ox = i * fw;
+          const charge = name.startsWith('charge');
+          const rage = name === 'rage';
+          const hurt = name === 'hurt';
+          const leap = name === 'leap';
+          const pulse = name === 'idle1' ? 1.04 : charge ? 1.07 : rage ? 1.09 : 1;
+          ctx.save();
+          ctx.translate(ox + 72, 61);
+          ctx.scale(pulse, leap ? 0.93 : 1);
+          ctx.fillStyle = 'rgba(11,8,35,0.42)';
+          ctx.beginPath(); ctx.ellipse(0, 43, 57, 10, 0, 0, Math.PI * 2); ctx.fill();
+
+          // Outer mantle and head.
+          ctx.fillStyle = rage ? '#3b205f' : '#271e58';
+          rounded(ctx, -56, -17, 112, 67, 29); ctx.fill();
+          ctx.fillStyle = hurt ? '#8c79d8' : rage ? '#9255d4' : '#6658c7';
+          ctx.beginPath(); ctx.arc(0, -14, 40, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(220,183,255,0.18)';
+          ctx.beginPath(); ctx.arc(-12, -26, 23, 0, Math.PI * 2); ctx.fill();
+
+          // Ears / crown.
+          ctx.fillStyle = rage ? '#ff7eb6' : '#c38fff';
+          ctx.beginPath(); ctx.moveTo(-43, -18); ctx.lineTo(-29, -51); ctx.lineTo(-18, -15); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(19, -15); ctx.lineTo(32, -51); ctx.lineTo(44, -18); ctx.closePath(); ctx.fill();
+
+          // Eyes.
+          ctx.fillStyle = '#f7fbff';
+          ctx.beginPath(); ctx.arc(-16, -17, 9, 0, Math.PI * 2); ctx.arc(16, -17, 9, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = charge || rage ? '#ff5b6e' : '#081326';
+          ctx.beginPath(); ctx.arc(-13, -15, charge ? 5 : 4, 0, Math.PI * 2); ctx.arc(19, -15, charge ? 5 : 4, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.7)';
+          ctx.beginPath(); ctx.arc(-16, -20, 2, 0, Math.PI * 2); ctx.arc(16, -20, 2, 0, Math.PI * 2); ctx.fill();
+
+          // Mouth changes by state.
+          ctx.strokeStyle = rage || charge ? '#ffe58f' : '#ffd66b';
+          ctx.lineWidth = 5;
+          ctx.beginPath();
+          if (hurt) {
+            ctx.arc(0, 4, 14, Math.PI + 0.2, Math.PI * 2 - 0.2);
+          } else if (charge || rage) {
+            ctx.arc(0, 2, 15, 0.1, Math.PI - 0.1);
+          } else {
+            ctx.arc(0, 0, 20, 0.2, Math.PI - 0.2);
+          }
+          ctx.stroke();
+
+          // Feet.
+          ctx.fillStyle = '#1d1849';
+          rounded(ctx, -43, 31, 27, 15, 7); ctx.fill();
+          rounded(ctx, 16, 31, 27, 15, 7); ctx.fill();
+
+          if (charge || rage) {
+            ctx.strokeStyle = rage ? 'rgba(255,126,182,0.72)' : 'rgba(155,123,255,0.65)';
+            ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(0, -5, charge ? 49 : 53, 0, Math.PI * 2); ctx.stroke();
+          }
+          ctx.restore();
+          tex.add(name, 0, ox, 0, fw, fh);
+        });
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists('terrain-sheet')) {
+      const fw = 96;
+      const fh = 56;
+      const names = ['meadow', 'grotto', 'canopy'] as const;
+      const tex = this.textures.createCanvas('terrain-sheet', fw * names.length, fh);
+      if (tex) {
+        const ctx = tex.getContext();
+        names.forEach((name, i) => {
+          const ox = i * fw;
+          ctx.save();
+          ctx.translate(ox, 0);
+          const base = name === 'meadow' ? '#173c4c' : name === 'grotto' ? '#152f43' : '#23264d';
+          const top = name === 'meadow' ? '#72a95e' : name === 'grotto' ? '#34806d' : '#6555a0';
+          const edge = name === 'meadow' ? '#b9f27c' : name === 'grotto' ? '#72e6b1' : '#b69aff';
+          ctx.fillStyle = base;
+          ctx.fillRect(0, 7, fw, fh - 7);
+          ctx.fillStyle = top;
+          ctx.fillRect(0, 0, fw, 17);
+          ctx.fillStyle = edge;
+          ctx.fillRect(0, 0, fw, 5);
+
+          if (name === 'meadow') {
+            ctx.fillStyle = '#345f4e';
+            for (let x = 9; x < fw; x += 23) {
+              ctx.beginPath(); ctx.ellipse(x, 27 + (x % 7), 8, 3, -0.35, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.fillStyle = 'rgba(255,214,107,0.34)';
+            ctx.beginPath(); ctx.arc(18, 8, 3, 0, Math.PI * 2); ctx.arc(69, 11, 2, 0, Math.PI * 2); ctx.fill();
+          } else if (name === 'grotto') {
+            ctx.fillStyle = '#0e2333';
+            for (let x = 8; x < fw; x += 19) {
+              ctx.beginPath(); ctx.moveTo(x, 18); ctx.lineTo(x + 7, 45); ctx.lineTo(x + 14, 18); ctx.closePath(); ctx.fill();
+            }
+            ctx.fillStyle = 'rgba(114,230,177,0.35)';
+            ctx.beginPath(); ctx.arc(15, 20, 3, 0, Math.PI * 2); ctx.arc(57, 33, 2.5, 0, Math.PI * 2); ctx.arc(83, 22, 2, 0, Math.PI * 2); ctx.fill();
+          } else {
+            ctx.fillStyle = '#171a3b';
+            for (let x = 6; x < fw; x += 18) {
+              ctx.beginPath(); ctx.moveTo(x, 17); ctx.lineTo(x + 9, 52); ctx.lineTo(x + 14, 17); ctx.closePath(); ctx.fill();
+            }
+            ctx.strokeStyle = 'rgba(195,180,255,0.34)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(15, 18); ctx.lineTo(24, 35); ctx.lineTo(34, 29); ctx.lineTo(43, 49); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(63, 20); ctx.lineTo(72, 31); ctx.lineTo(84, 18); ctx.stroke();
+          }
+
+          ctx.fillStyle = 'rgba(255,255,255,0.05)';
+          ctx.fillRect(0, 5, fw, 2);
+          ctx.restore();
+          tex.add(name, 0, ox, 0, fw, fh);
+        });
+        tex.refresh();
+      }
+    }
+  }
+
+  private createAnimations(): void {
+    const make = (key: string, frames: Phaser.Types.Animations.AnimationFrame[], frameRate: number, repeat = -1) => {
+      if (!this.anims.exists(key)) this.anims.create({ key, frames, frameRate, repeat });
+    };
+    const p = (name: string) => ({ key: 'player-sheet', frame: name });
+    make('player-idle', ['idle0', 'idle1', 'idle2', 'idle3'].map(p), 5);
+    make('player-run', ['run0', 'run1', 'run2', 'run3'].map(p), 11);
+    make('player-jump', [p('jump')], 1);
+    make('player-fall', [p('fall')], 1);
+    make('player-attack', ['attack0', 'attack1', 'attack2'].map(p), 14, 0);
+    make('player-dash', [p('dash')], 1);
+    make('player-hurt', [p('hurt')], 1);
+
+    const slime = (name: string) => ({ key: 'slime-sheet', frame: name });
+    make('slime-bounce', ['bounce0', 'bounce1', 'bounce2', 'bounce3'].map(slime), 7);
+
+    const boss = (name: string) => ({ key: 'boss-sheet', frame: name });
+    make('boss-idle', ['idle0', 'idle1'].map(boss), 3);
+    make('boss-charge', ['charge0', 'charge1'].map(boss), 8);
+    make('boss-leap', [boss('leap')], 1);
+    make('boss-rage', ['rage', 'charge1'].map(boss), 7);
+    make('boss-hurt', [boss('hurt')], 1);
+  }
+
   private createBackdrop(): void {
     const sky = this.add.graphics().setScrollFactor(0).setDepth(-60);
     const bands = [0x061021, 0x091c33, 0x0d2b45, 0x12425a, 0x1b6070, 0x2d7f7b];
@@ -441,7 +776,11 @@ class LumenwildScene extends Phaser.Scene {
 
   private addPlatform(x: number, y: number, w: number, h = 32): Phaser.Physics.Arcade.Sprite {
     const p = this.platforms.create(x, y, 'platform') as Phaser.Physics.Arcade.Sprite;
-    p.setDisplaySize(w, h).refreshBody();
+    p.setDisplaySize(w, h).setAlpha(0).refreshBody();
+    const frame = x < 1850 ? 'meadow' : x < 3600 ? 'grotto' : 'canopy';
+    this.add.tileSprite(x, y, w, h, 'terrain-sheet', frame)
+      .setDepth(1)
+      .setTileScale(1, Math.max(0.82, h / 50));
     this.decoratePlatform(x, y, w, h);
     return p;
   }
@@ -490,6 +829,41 @@ class LumenwildScene extends Phaser.Scene {
       const star = this.add.circle(4480 + i * 55, 165 + (i % 3) * 44, 2 + (i % 2), 0xf4e9ff, 0.38).setDepth(-6);
       this.tweens.add({ targets: star, alpha: 0.08, yoyo: true, repeat: -1, duration: 900 + i * 170 });
     }
+  }
+
+  private createForegroundDetails(): void {
+    const place = (x: number, y: number, key: string, scale: number, alpha: number, flip = false) => {
+      const image = this.add.image(x, y, key)
+        .setScale(scale)
+        .setAlpha(alpha)
+        .setFlipX(flip)
+        .setDepth(24)
+        .setScrollFactor(1.035);
+      this.tweens.add({
+        targets: image,
+        angle: { from: flip ? 2.5 : -2.5, to: flip ? -2.5 : 2.5 },
+        yoyo: true,
+        repeat: -1,
+        duration: 3600 + (Math.floor(x) % 1400),
+        ease: 'Sine.inOut',
+      });
+      return image;
+    };
+
+    // Meadow leaves briefly sweep the lower frame edge.
+    place(350, 930, 'fern', 2.2, 0.12, false);
+    place(1020, 950, 'leaf', 4.4, 0.10, true);
+    place(1710, 925, 'fern', 2.0, 0.11, true);
+
+    // Grotto silhouettes feel closer and denser.
+    place(2180, 905, 'mushroom', 2.3, 0.10, false);
+    place(2860, 930, 'fern', 2.8, 0.14, true);
+    place(3480, 910, 'mushroom', 2.0, 0.09, true);
+
+    // Canopy foreground crystal growths create depth near the boss arena.
+    place(3890, 920, 'crystal-bud', 2.8, 0.10, false);
+    place(4560, 930, 'crystal-bud', 3.4, 0.12, true);
+    place(5200, 920, 'fern', 2.4, 0.08, true);
   }
 
   private createWorld(): void {
@@ -582,9 +956,10 @@ class LumenwildScene extends Phaser.Scene {
   private createPlayer(): void {
     this.playerShadow = this.add.ellipse(this.checkpoint.x, this.checkpoint.y + 30, 48, 13, 0x020817, 0.34).setDepth(4);
     this.playerGlow = this.add.circle(this.checkpoint.x, this.checkpoint.y, 34, palette.mint, 0.10).setBlendMode(Phaser.BlendModes.ADD).setDepth(5);
-    this.player = this.physics.add.sprite(this.checkpoint.x, this.checkpoint.y, 'player');
+    this.player = this.physics.add.sprite(this.checkpoint.x, this.checkpoint.y, 'player-sheet', 'idle0');
+    this.player.play('player-idle');
     this.player.setDepth(8).setBounce(0.02).setCollideWorldBounds(true);
-    this.player.setSize(31, 50).setOffset(14, 10);
+    this.player.setSize(30, 49).setOffset(21, 20);
     this.player.setMaxVelocity(470, 900);
     this.player.setDragX(1700);
     this.tweens.add({ targets: this.playerGlow, scale: 1.14, alpha: 0.055, yoyo: true, repeat: -1, duration: 1250, ease: 'Sine.inOut' });
@@ -593,8 +968,9 @@ class LumenwildScene extends Phaser.Scene {
   private createEnemies(): void {
     this.enemies = this.physics.add.group({ collideWorldBounds: true });
     const spawnSlime = (x: number, y: number, left: number, right: number) => {
-      const e = this.enemies.create(x, y, 'slime') as Phaser.Physics.Arcade.Sprite;
-      e.setDepth(7).setSize(38, 26).setBounce(0.1).setDataEnabled();
+      const e = this.enemies.create(x, y, 'slime-sheet', 'bounce0') as Phaser.Physics.Arcade.Sprite;
+      e.play('slime-bounce');
+      e.setDepth(7).setSize(39, 27).setOffset(10, 17).setBounce(0.1).setDataEnabled();
       e.setData('hp', 2).setData('kind', 'slime').setData('left', left).setData('right', right).setData('dir', 1);
     };
     spawnSlime(780, 860, 620, 870);
@@ -605,9 +981,10 @@ class LumenwildScene extends Phaser.Scene {
     spawnSlime(3920, 670, 3830, 3970);
 
     if (!this.bossDefeated) {
-      const boss = this.enemies.create(4650, 840, 'boss') as Phaser.Physics.Arcade.Sprite;
-      boss.setDepth(7).setSize(88, 72).setBounce(0.5).setDataEnabled();
-      boss.setData('hp', 9).setData('kind', 'boss').setData('dir', -1).setData('nextLeap', 0);
+      const boss = this.enemies.create(4650, 840, 'boss-sheet', 'idle0') as Phaser.Physics.Arcade.Sprite;
+      boss.play('boss-idle');
+      boss.setDepth(7).setSize(92, 75).setOffset(26, 37).setBounce(0.5).setDataEnabled();
+      boss.setData('hp', 9).setData('kind', 'boss').setData('dir', -1).setData('nextLeap', 1100).setData('phase', 1).setData('wasAirborne', false);
     }
   }
 
@@ -757,6 +1134,7 @@ class LumenwildScene extends Phaser.Scene {
     }
     if (time < this.dashReadyAt || this.dashing) return;
     this.dashing = true;
+    this.player.play('player-dash', true);
     this.dashReadyAt = time + 620;
     this.soundscape.dash();
     const body = this.player.body as Phaser.Physics.Arcade.Body;
@@ -777,6 +1155,7 @@ class LumenwildScene extends Phaser.Scene {
   private attack(): void {
     if (this.attacking) return;
     this.attacking = true;
+    this.player.play('player-attack', true);
     this.soundscape.attack();
     const x = this.player.x + this.facing * 39;
     const slash = this.add.arc(x, this.player.y, 33, this.facing > 0 ? 300 : 120, this.facing > 0 ? 70 : 250, false, palette.sun, 0.62).setDepth(9);
@@ -806,15 +1185,35 @@ class LumenwildScene extends Phaser.Scene {
     this.playerShadow.setScale(shadowScale, 1);
     this.playerShadow.setAlpha(grounded ? 0.34 : 0.16);
 
+    if (!this.wasGrounded && grounded && Math.abs(speedY) > 120) {
+      this.player.setScale(1.12, 0.88);
+      this.time.delayedCall(75, () => this.player.active && this.player.setScale(1));
+      const color = this.player.x < 1900 ? palette.sun : this.player.x < 3650 ? palette.mint : palette.pink;
+      this.burst(this.player.x, this.player.y + 26, color, 5, 72);
+    }
+    this.wasGrounded = grounded;
+
     if (!this.dashing) {
-      const stretch = Phaser.Math.Clamp(speedY / 1900, -0.10, 0.12);
-      this.player.setScale(1 - stretch * 0.35, 1 + stretch);
-      this.player.setAngle(Phaser.Math.Clamp(body.velocity.x / 105, -5, 5));
+      this.player.setAngle(Phaser.Math.Clamp(body.velocity.x / 125, -4, 4));
+    }
+
+    if (this.dashing) {
+      this.player.play('player-dash', true);
+    } else if (this.attacking) {
+      this.player.play('player-attack', true);
+    } else if (time < this.invulnerableUntil - 620) {
+      this.player.play('player-hurt', true);
+    } else if (!grounded) {
+      this.player.play(speedY < 15 ? 'player-jump' : 'player-fall', true);
+    } else if (speedX > 55) {
+      this.player.play('player-run', true);
+    } else {
+      this.player.play('player-idle', true);
     }
 
     if (this.dashing && time - this.lastTrailAt > 34) {
       this.lastTrailAt = time;
-      const ghost = this.add.image(this.player.x - this.facing * 12, this.player.y, 'player')
+      const ghost = this.add.image(this.player.x - this.facing * 12, this.player.y, 'player-sheet', this.player.frame.name)
         .setFlipX(this.player.flipX)
         .setTint(0x8ff5ff)
         .setAlpha(0.30)
@@ -888,28 +1287,62 @@ class LumenwildScene extends Phaser.Scene {
     this.enemies.getChildren().forEach(child => {
       const enemy = child as Phaser.Physics.Arcade.Sprite;
       if (!enemy.active) return;
-      const phase = Math.sin(time * 0.006 + enemy.x * 0.01);
+
       if (enemy.getData('kind') === 'boss') {
         const bossHp = enemy.getData('hp') as number;
+        let phase = enemy.getData('phase') as number;
         bossPresented = this.player.x > 4250 && bossHp > 0;
         this.bossBarFill.setScale(Phaser.Math.Clamp(bossHp / 9, 0, 1), 1);
-        enemy.setScale(1 + phase * 0.025, 1 - phase * 0.018);
-        enemy.setAngle(phase * 1.3);
-        const dist = this.player.x - enemy.x;
-        enemy.setVelocityX(Phaser.Math.Clamp(dist * 0.55, -185, 185));
-        enemy.setFlipX(dist < 0);
-        const body = enemy.body as Phaser.Physics.Arcade.Body;
-        if (time > (enemy.getData('nextLeap') as number) && body.blocked.down) {
-          enemy.setData('nextLeap', time + 1700);
-          enemy.setVelocityY(-390);
-          enemy.setVelocityX(Math.sign(dist || 1) * 270);
-          this.burst(enemy.x, enemy.y + 38, palette.violet, 10, 180);
-          this.ring(enemy.x, enemy.y + 26, palette.pink);
+
+        if (bossHp <= 4 && phase === 1) {
+          phase = 2;
+          enemy.setData('phase', 2);
+          this.bossBarFill.setFillStyle(palette.sun, 0.95);
+          enemy.play('boss-rage', true);
+          this.ring(enemy.x, enemy.y - 5, palette.pink);
+          this.burst(enemy.x, enemy.y, palette.sun, 18, 230);
+          this.cameras.main.flash(250, 190, 120, 255);
+          this.toast('MOONRAGE! The Gloomkeeper finds a faster rhythm.', 2200);
         }
+
+        const dist = this.player.x - enemy.x;
+        const body = enemy.body as Phaser.Physics.Arcade.Body;
+        const nextLeap = enemy.getData('nextLeap') as number;
+        const grounded = body.blocked.down || body.touching.down;
+        const wasAirborne = Boolean(enemy.getData('wasAirborne'));
+
+        if (grounded && wasAirborne) {
+          enemy.setData('wasAirborne', false);
+          this.ring(enemy.x, enemy.y + 37, phase === 2 ? palette.sun : palette.violet);
+          this.burst(enemy.x, enemy.y + 42, phase === 2 ? palette.pink : palette.violet, phase === 2 ? 15 : 10, 165);
+          this.cameras.main.shake(phase === 2 ? 145 : 90, phase === 2 ? 0.005 : 0.003);
+        }
+
+        const telegraphWindow = phase === 2 ? 260 : 350;
+        if (grounded && time > nextLeap - telegraphWindow && time < nextLeap && enemy.getData('telegraphFor') !== nextLeap) {
+          enemy.setData('telegraphFor', nextLeap);
+          enemy.play('boss-charge', true);
+          this.ring(enemy.x, enemy.y + 22, phase === 2 ? palette.sun : palette.pink);
+        }
+
+        if (time > nextLeap && grounded) {
+          enemy.setData('nextLeap', time + (phase === 2 ? 1080 : 1680));
+          enemy.setData('wasAirborne', true);
+          enemy.play('boss-leap', true);
+          enemy.setVelocityY(phase === 2 ? -435 : -390);
+          enemy.setVelocityX(Math.sign(dist || 1) * (phase === 2 ? 325 : 270));
+          this.burst(enemy.x, enemy.y + 38, phase === 2 ? palette.pink : palette.violet, 11, 185);
+        } else if (grounded && time < nextLeap - telegraphWindow) {
+          enemy.play(phase === 2 ? 'boss-rage' : 'boss-idle', true);
+          enemy.setVelocityX(Phaser.Math.Clamp(dist * (phase === 2 ? 0.68 : 0.5), phase === 2 ? -205 : -155, phase === 2 ? 205 : 155));
+        } else if (!grounded) {
+          enemy.play('boss-leap', true);
+        }
+        enemy.setFlipX(dist < 0);
         return;
       }
-      enemy.setScale(1 + phase * 0.035, 1 - phase * 0.04);
-      enemy.setAngle(phase * 1.8);
+
+      enemy.play('slime-bounce', true);
       let dir = enemy.getData('dir') as number;
       const left = enemy.getData('left') as number;
       const right = enemy.getData('right') as number;
@@ -927,6 +1360,7 @@ class LumenwildScene extends Phaser.Scene {
     enemy.setData('lastHit', this.time.now);
     const hp = (enemy.getData('hp') as number) - amount;
     enemy.setData('hp', hp);
+    if (enemy.getData('kind') === 'boss') enemy.play('boss-hurt', true);
     enemy.setTintFill(0xffffff);
     this.time.delayedCall(70, () => enemy.active && enemy.clearTint());
     enemy.setVelocityX(this.facing * 220);
@@ -950,6 +1384,7 @@ class LumenwildScene extends Phaser.Scene {
     if (this.time.now < this.invulnerableUntil || this.dashing || this.won) return;
     this.invulnerableUntil = this.time.now + 900;
     this.health -= amount;
+    this.player.play('player-hurt', true);
     this.soundscape.hit();
     this.player.setVelocity((this.player.x - sourceX >= 0 ? 1 : -1) * 260, -290);
     this.player.setTintFill(0xffd2d8);
@@ -965,6 +1400,7 @@ class LumenwildScene extends Phaser.Scene {
     const body = this.player.body as Phaser.Physics.Arcade.Body;
     body.allowGravity = true;
     this.player.clearTint().setAlpha(1).setScale(1).setAngle(0).setVelocity(0).setPosition(this.checkpoint.x, this.checkpoint.y);
+    this.player.play('player-idle', true);
     this.cameras.main.fadeOut(120, 8, 18, 38);
     this.time.delayedCall(130, () => this.cameras.main.fadeIn(330, 8, 18, 38));
     this.updateHud();
