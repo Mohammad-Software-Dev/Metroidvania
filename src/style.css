@@ -1,0 +1,15 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #f7fbff;
+  background: #050b18;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; min-width: 100%; min-height: 100%; overflow: hidden; background: radial-gradient(circle at 50% 15%, #12315c 0%, #071226 42%, #030713 100%); }
+body { min-height: 100vh; }
+#app { display: grid; place-items: center; min-height: 100vh; }
+#game-shell { width: 100vw; height: 100vh; position: relative; overflow: hidden; box-shadow: inset 0 0 90px #0008; }
+#game { width: 100%; height: 100%; }
+canvas { display: block; width: 100% !important; height: 100% !important; image-rendering: auto; }
